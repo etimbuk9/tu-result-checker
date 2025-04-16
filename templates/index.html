@@ -47,9 +47,34 @@
         <button
           type="submit"
           class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700"
+          id="submitButton"
         >
           View Results
         </button>
+        <div id="spinner" style="display: none">
+          <div class="loader"></div>
+        </div>
+
+        <style>
+          .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+          }
+
+          @keyframes spin {
+            0% {
+              transform: rotate(0deg);
+            }
+            100% {
+              transform: rotate(360deg);
+            }
+          }
+        </style>
       </form>
     </div>
 
@@ -62,12 +87,18 @@
           const session = document.getElementById("session").value;
           const semester = document.getElementById("semester").value;
 
+          // Show spinner
+          document.getElementById("spinner").style.display = "block";
+          const submitButton = document.getElementById("submitButton");
+          submitButton.disabled = true;
           // Redirect to results page with query parameters
-          window.location.href = `results.html?student=${encodeURIComponent(
-            student
-          )}&session=${encodeURIComponent(
-            session
-          )}&semester=${encodeURIComponent(semester)}`;
+          setTimeout(() => {
+            window.location.href = `results2/?student=${encodeURIComponent(
+              student
+            )}&session=${encodeURIComponent(
+              session
+            )}&semester=${encodeURIComponent(semester)}`;
+          }, 100);
         });
     </script>
   </body>

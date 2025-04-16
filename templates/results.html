@@ -78,7 +78,9 @@
         spinner.classList.add("hidden");
       }
 
-      var api_url = `http://localhost:8002/results/?${queryParams}`;
+      const BASE_URL = window.location.origin;
+
+      var api_url = `${BASE_URL}/results/?${queryParams}`;
       console.log("API URL:", api_url);
       showSpinner();
       fetch(api_url, {
