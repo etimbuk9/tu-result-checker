@@ -145,43 +145,7 @@ async def get_result_html2(request: Request, session: str, semester: str, studen
                                row['course_units'], row['total_score'], row['final_grade']]
                 data['status'] = 'success'
                 data['results'].append(result_dict)
-            # data['html'] = f"""
-            #     <table class="table-auto" style="width: 100%;">
-            #     <thead class="text-left">
-            #         <tr>
-            #             <th>Course Name</th>
-            #             <th>Course Units</th>
-            #             <th>Total Score</th>
-            #             <th>Final Grade</th>
-            #         </tr>
-            #     </thead>
-            #     <tbody>
-            #         {''.join([f"<tr><td>{r[0]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td></tr>" for r in data['results']])}
-            #     </tbody>
-            #     </table>
 
-            #     <br><hr><br>
-
-            #     <table style="width: 100%;">
-            #     <tbody>
-            #     <tr>
-            #         <td>Total Credit Hours</td>
-            #         <td>{sum(result['course_units'].tolist())}</td>
-            #     </tr>
-            #     <tr>
-            #         <td>Total Grade Points</td>
-            #         <td>{total_gp}</td>
-            #     </tr>
-            #     <tr>
-            #         <td>Grade Point Average</td>
-            #         <td>{round(total_gp/sum(result['course_units'].tolist()), 2)}</td>
-            #     </tr>
-            #     </tbody>
-            #     </table>
-
-            #     <br><hr><br>
-
-            #     """
             return templates.TemplateResponse("results2.html", {
                 "request": request,
                 "session": session,
@@ -193,5 +157,5 @@ async def get_result_html2(request: Request, session: str, semester: str, studen
                 "total_grade_points": total_gp,
                 "gpa": round(total_gp/sum(result['course_units'].tolist()), 2),
             })
-        else:
-            return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
+
+    return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
