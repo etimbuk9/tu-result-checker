@@ -81,7 +81,7 @@ async def confirm_discount_code(request: Request, discount_code: str):
     with urllib.request.urlopen(codes_url, context=context) as response:
         df = pd.read_csv(response)
 
-    if discount_code in df['discountCode'].values:
+    if discount_code.strip() in df['discountCode'].values:
 
         return {'status': True, 'message': 'Discount code is valid.'}
 
