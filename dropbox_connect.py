@@ -8,6 +8,13 @@ import ssl
 # Load environment variables from .env file
 load_dotenv()
 
+headers = {
+    'Authorization': os.getenv('PAYSTACK_KEY'),
+    # 'Cache-Control': 'max-age=0',
+    # 'Origin': 'https://www.example.com',
+    # 'Accept-Encoding': 'gzip, deflate, br',
+}
+
 # Get the Dropbox access token from environment variables
 DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_KEY')
 if not DROPBOX_ACCESS_TOKEN:
@@ -34,6 +41,22 @@ def get_result_url(session, semester):
     files = dbx.files_list_folder(folder).entries
     files = [file for file in files if isinstance(
         file, dropbox.files.FileMetadata) and file.name == f"final-result-{session}-{semester}.csv"]
+
+    if files:
+
+        file = files[0]
+
+        file_url = getFileInformation(folder + '/' + file.name)
+        return file_url
+
+    return None
+
+
+def get_code_url(filename):
+    folder = '/FinalResults'
+    files = dbx.files_list_folder(folder).entries
+    files = [file for file in files if isinstance(
+        file, dropbox.files.FileMetadata) and file.name == filename]
 
     if files:
 

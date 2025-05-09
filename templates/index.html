@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <title>Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.paystack.co/v2/inline.js"></script>
   </head>
   <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-4xl">
@@ -43,6 +44,13 @@
           <option value="Second Semester">Second Semester</option>
           <option value="Supplementary2">Supplementary2</option>
         </select>
+
+        <input
+          id="discountCode"
+          type="text"
+          placeholder="Discount Code (Optional)"
+          class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
 
         <button
           type="submit"
@@ -86,19 +94,115 @@
           const student = document.getElementById("studentNumber").value;
           const session = document.getElementById("session").value;
           const semester = document.getElementById("semester").value;
+          const discountCode = document.getElementById("discountCode").value;
 
-          // Show spinner
-          document.getElementById("spinner").style.display = "block";
-          const submitButton = document.getElementById("submitButton");
-          submitButton.disabled = true;
-          // Redirect to results page with query parameters
-          setTimeout(() => {
-            window.location.href = `results2/?student=${encodeURIComponent(
-              student
-            )}&session=${encodeURIComponent(
-              session
-            )}&semester=${encodeURIComponent(semester)}`;
-          }, 100);
+          const BASE_URL = window.location.origin;
+
+          const callbackUrl = `${BASE_URL}/results2/?student=${encodeURIComponent(
+            student
+          )}&session=${encodeURIComponent(
+            session
+          )}&semester=${encodeURIComponent(semester)}`;
+
+          const queryParams = new URLSearchParams({
+            email: `${student}@topfaith.edu.ng`,
+            callbackUrl: callbackUrl,
+          }).toString();
+
+          var api_url = `${BASE_URL}/get-access-code/?${queryParams}`;
+
+          console.log(api_url);
+
+          if (discountCode.toString().trim() === "") {
+            fetch(api_url, {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                console.log("API Response:", data);
+                if (data.status) {
+                  const paystack = new PaystackPop();
+                  paystack.resumeTransaction(data.data.access_code, {
+                    onSuccess: function (transaction) {
+                      console.log("Transaction successful:", transaction);
+
+                      // Load Spinner
+                      document.getElementById("spinner").style.display =
+                        "block";
+                      const submitButton =
+                        document.getElementById("submitButton");
+                      submitButton.disabled = true;
+
+                      // Handle successful transaction here
+                      // Redirect to results page with query parameters
+                      window.location.href = `results2/?student=${encodeURIComponent(
+                        student
+                      )}&session=${encodeURIComponent(
+                        session
+                      )}&semester=${encodeURIComponent(semester)}&reference=${
+                        transaction.reference
+                      }`;
+                    },
+                    onCancel: function () {
+                      console.log("Transaction cancelled");
+                      // Handle cancellation here
+                    },
+                    onError: function (error) {
+                      console.error("Transaction error:", error);
+                      // Handle error here
+                    },
+                  });
+                } else {
+                  alert("Invalid Student Number");
+                }
+              })
+              .catch((error) => {
+                console.error("Error:", error);
+              });
+          } else {
+            var confirmation_url = `${BASE_URL}/confirm-discount-code/?discount_code=${discountCode}`;
+
+            // Load Spinner
+            document.getElementById("spinner").style.display = "block";
+            const submitButton = document.getElementById("submitButton");
+            submitButton.disabled = true;
+
+            fetch(confirmation_url, {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                console.log("API Response:", data);
+                if (data.status) {
+                  // Handle successful transaction here
+                  // Redirect to results page with query parameters
+
+                  window.location.href = `results2/?student=${encodeURIComponent(
+                    student
+                  )}&session=${encodeURIComponent(
+                    session
+                  )}&semester=${encodeURIComponent(
+                    semester
+                  )}&reference=discountCode`;
+                } else {
+                  // Hide Spinner
+                  document.getElementById("spinner").style.display = "none";
+                  // Enable Submit Button
+                  const submitButton = document.getElementById("submitButton");
+                  submitButton.disabled = false;
+                  alert("Invalid Discount Code");
+                }
+              })
+              .catch((error) => {
+                console.error("Error:", error);
+              });
+          }
         });
     </script>
   </body>
