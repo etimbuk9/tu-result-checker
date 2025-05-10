@@ -342,7 +342,7 @@ async def download_result(request: Request, session: str, semester: str, student
             pdf = pdfkit.from_string(temp, False, options=pdf_options)
 
             return Response(content=pdf, media_type="application/pdf", headers={
-                "Content-Disposition": "attachment; filename=topfaith_report.pdf"
+                "Content-Disposition": f"attachment; filename=result_{session}_{semester}_{student}.pdf"
             })
 
     # return templates.TemplateResponse("results2.html", {
