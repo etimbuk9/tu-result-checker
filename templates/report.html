@@ -3,12 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <title>Student Results</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+      @page {
+          size: A4 landscape;
+          margin: 1cm;
+      }
+  
+      body {
+          font-family: DejaVu Sans, sans-serif;
+      }
+  
+      h1 {
+          color: darkgreen;
+      }
+  
+      p {
+          font-size: 14px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th, td {
+        text-align: left;       /* Center horizontally */
+        padding: 8px;
+    }
+  </style>
   </head>
   <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-6xl">
-      <h2 class="text-2xl font-bold text-blue-700 mb-4 text-center">Results</h2>
       <!-- Spinner -->
       <div
         id="loadingSpinner"
@@ -22,8 +46,8 @@
       <div id="resultsContent" class="text-gray-800 space-y-2 text-sm">
         {% if results %}
         <div id="resultsPrint">
-          <h2 class="text-5xl font-semibold">Topfaith University</h2>
-          <h4 class="text-2xl font-thin">Mkpatak, Akwa Ibom State</h4>
+          <h2 style="font-size: x-large;">Topfaith University</h2>
+          <h4 style="font-size: medium;">Mkpatak, Akwa Ibom State</h4>
           <hr class="my-2" />
           <table>
             <tr>
@@ -47,35 +71,35 @@
           <table class="table-auto w-full mb-4">
             <thead class="text-left">
               <tr>
-                <th class="px-4 py-2">Course</th>
-                <th class="px-4 py-2">Credit Unit</th>
-                <th class="px-4 py-2">Attendance</th>
-                <th class="px-4 py-2">Assignment</th>
-                <th class="px-4 py-2">MidSemester Test</th>
-                <th class="px-4 py-2">Presentation</th>
-                <th class="px-4 py-2">Exams</th>
-                <th class="px-4 py-2">Total</th>
-                <th class="px-4 py-2">Grade</th>
+                <th style="border-bottom: 1px;">Course</th>
+                <th style="border-bottom: 1px;">Credit Unit</th>
+                <th style="border-bottom: 1px;">Attendance</th>
+                <th style="border-bottom: 1px;">Assignment</th>
+                <th style="border-bottom: 1px;">MidSemester Test</th>
+                <th style="border-bottom: 1px;">Presentation</th>
+                <th style="border-bottom: 1px;">Exams</th>
+                <th style="border-bottom: 1px;">Total</th>
+                <th style="border-bottom: 1px;">Grade</th>
               </tr>
             </thead>
             <tbody>
               {% for a,b,c,d,e in results %}
               <tr>
-                <td class="border-b px-4 py-2">{{ a }}</td>
-                <td class="border-b px-4 py-2">{{ b }}</td>
-                <td class="border-b px-4 py-2">{{ e.attendance }}</td>
-                <td class="border-b px-4 py-2">{{ e.assignment }}</td>
-                <td class="border-b px-4 py-2">{{ e.mid_sem_test }}</td>
-                <td class="border-b px-4 py-2">{{ e.class_presentation }}</td>
-                <td class="border-b px-4 py-2">{{ e.exam_score }}</td>
-                <td class="border-b px-4 py-2">{{ c }}</td>
-                <td class="border-b px-4 py-2">{{ d }}</td>
+                <td>{{ a }}</td>
+                <td>{{ b }}</td>
+                <td>{{ e.attendance }}</td>
+                <td>{{ e.assignment }}</td>
+                <td>{{ e.mid_sem_test }}</td>
+                <td>{{ e.class_presentation }}</td>
+                <td>{{ e.exam_score }}</td>
+                <td>{{ c }}</td>
+                <td>{{ d }}</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
           <br />
-          <p class="font-bold text-lg">Summary</p>
+          <h3 style="font-size: medium;">Summary</h3>
           <hr />
           <br />
           <table class="table-auto w-full mb-4">
@@ -102,20 +126,7 @@
           <hr />
           <br />
         </div>
-        <div class="flex justify-evenly">
-          <button
-            onclick="back_to_home()"
-            class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-          >
-            Back
-          </button>
-          <!-- <a href="/download-result" class="btn btn-success">Download PDF</a> -->
-          <button
-            onclick="downloadPDF2('{{session}}', '{{semester}}' ,'{{ student }}')"
-            class="mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
-            Download PDF
-          </button>
+        
           {% else %}
           <div class="flex justify-center items-center">
             <p class="text-red-500">No results found or invalid response.</p>
@@ -152,21 +163,6 @@
           })
           .from(element)
           .save();
-      }
-    </script>
-
-    <script>
-      // const session = {{session|safe}};
-      // const semester = {{semester|safe}};
-      // const student = {{student|safe}};
-
-      function downloadPDF2(session, semester, student) {
-        const BASE_URL = window.location.origin;
-        window.location.href = `${BASE_URL}/download-result/?student=${encodeURIComponent(
-          student
-        )}&session=${encodeURIComponent(session)}&semester=${encodeURIComponent(
-          semester
-        )}`;
       }
     </script>
 

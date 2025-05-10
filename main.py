@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -9,6 +9,9 @@ from datetime import datetime as dt
 import pandas as pd
 import urllib
 import ssl
+from xhtml2pdf import pisa
+import pdfkit
+from io import BytesIO
 
 app = FastAPI()
 START_YEAR = 2021
@@ -37,6 +40,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class ResultBreakdown:
+    def __init__(self, result: dict):
+        self.attendance = result.get('attendance', 0)
+        self.assignment = result.get('assignment', 0)
+        self.mid_sem_test = result.get('mid_sem_test', 0)
+        self.class_presentation = result.get('class_presentation', 0)
+        self.senate_recommends = result.get('senate_recommends', 0)
+        self.exam_score = result.get('exam_score', 0)
 
 
 def get_grade_point(grade):
@@ -236,7 +249,7 @@ async def get_result_html2(request: Request, session: str, semester: str, studen
                 for index, row in result.iterrows():
                     # print(type(row['student_details']))
                     result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
-                                   row['course_units'], row['total_score'], row['final_grade']]
+                                   row['course_units'], row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
                     data['status'] = 'success'
                     data['results'].append(result_dict)
 
@@ -256,3 +269,91 @@ async def get_result_html2(request: Request, session: str, semester: str, studen
                 })
 
     return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
+
+
+def render_template(template_name: str, context: dict) -> str:
+    """Render a Jinja2 template with context."""
+    template = templates.get_template(template_name)
+    return template.render(context)
+
+
+def convert_html_to_pdf(source_html: str) -> bytes:
+    """Convert HTML content to PDF and return as bytes."""
+    result = BytesIO()
+    pdf = pisa.CreatePDF(src=source_html, dest=result)
+    if not pdf.err:
+        return result.getvalue()
+    return None
+
+
+@app.get("/download-result/")
+async def download_result(request: Request, session: str, semester: str, student: str):
+    if not session or not semester or not student:
+        raise HTTPException(status_code=400, detail="Missing parameters")
+
+    if '/' in session:
+        session = str(session).replace('/', '-')
+
+    url = dropbox_connect.get_result_url(session, semester)
+
+    if url:
+        result = dropbox_connect.get_student_result(url, student)
+        student_name = ""
+        # print(f"Result: {result}")
+        if result is not None:
+            result.fillna('', inplace=True)
+            student_name = eval(result['student_details'].iloc[0])[
+                'student_name']
+            total_gp = sum([get_grade_point(grade) * units for grade,
+                            units in zip(result['final_grade'], result['course_units'])])
+            data = {'status': '', 'results': [], 'html': ''}
+            for index, row in result.iterrows():
+                # print(type(row['student_details']))
+                result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
+                               row['course_units'], row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
+                data['status'] = 'success'
+                data['results'].append(result_dict)
+
+            cgpa = calculate_cgpa(session, semester, student)
+
+            context = {
+                "session": session,
+                "semester": semester,
+                "student": student,
+                "student_name": student_name,
+                "results": data['results'],
+                "total_credit_hours": sum(result['course_units'].tolist()),
+                "total_grade_points": total_gp,
+                "gpa": round(total_gp/sum(result['course_units'].tolist()), 2),
+                "cgpa": round(cgpa, 2),
+            }
+
+            temp = render_template('report.html', context)
+            pdf_options = {
+                "page-size": "A4",
+                "orientation": "Landscape",
+                "encoding": "UTF-8",
+                "margin-top": "10mm",
+                "margin-bottom": "10mm",
+                "margin-left": "10mm",
+                "margin-right": "10mm",
+            }
+
+            pdf = pdfkit.from_string(temp, False, options=pdf_options)
+
+            return Response(content=pdf, media_type="application/pdf", headers={
+                "Content-Disposition": "attachment; filename=topfaith_report.pdf"
+            })
+
+    # return templates.TemplateResponse("results2.html", {
+    #     "request": request,
+    #     "session": session,
+    #     "semester": semester,
+    #     "student": student,
+    #     "student_name": student_name,
+    #     "results": data['results'],
+    #     "total_credit_hours": sum(result['course_units'].tolist()),
+    #     "total_grade_points": total_gp,
+    #     "gpa": round(total_gp/sum(result['course_units'].tolist()), 2),
+    #     "cgpa": round(cgpa, 2),
+    # })
