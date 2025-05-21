@@ -311,16 +311,19 @@ async def download_result(request: Request, session: str, semester: str, student
             student_name = eval(result['student_details'].iloc[0])[
                 'student_name']
             total_gp = sum([get_grade_point(grade) * units for grade,
-                            units in zip(result['final_grade'], result['course_units'])])
+                            units, oof in zip(result['final_grade'], result['course_units'], result['out_of_faculty']) if not oof])
             data = {'status': '', 'results': [], 'html': ''}
             for index, row in result.iterrows():
                 # print(type(row['student_details']))
                 result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
-                               row['course_units'], row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
+                               row['course_units'] if not row['out_of_faculty'] else 0, row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
                 data['status'] = 'success'
                 data['results'].append(result_dict)
 
             cgpa = calculate_cgpa(session, semester, student)
+
+            tch = sum([unit for unit, oof in zip(
+                result['course_units'], result['out_of_faculty']) if not oof])
 
             context = {
                 "session": session,
@@ -328,9 +331,9 @@ async def download_result(request: Request, session: str, semester: str, student
                 "student": student,
                 "student_name": student_name,
                 "results": data['results'],
-                "total_credit_hours": sum(result['course_units'].tolist()),
+                "total_credit_hours": tch,
                 "total_grade_points": total_gp,
-                "gpa": round(total_gp/sum(result['course_units'].tolist()), 2),
+                "gpa": round(total_gp/tch, 2) if tch > 0 else 0,
                 "cgpa": round(cgpa, 2),
             }
 
