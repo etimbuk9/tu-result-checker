@@ -119,6 +119,8 @@ def calculate_cgpa(session, semester, student):
     result_df = pd.concat(results, ignore_index=True)
     result_df['grade'] = result_df['final_grade'].apply(
         lambda x: 5 if x == 'A' else 4 if x == 'B' else 3 if x == 'C' else 2 if x == 'D' else 1 if x == 'E' else 0)
+    result_df['course_units'] = [0 if result_df['out_of_faculty'].iloc[x]
+                                 else result_df['course_units'].iloc[x] for x in range(result_df.shape[0])]
     result_df['grade_point'] = result_df['grade'] * result_df['course_units']
     total_credit_units = result_df['course_units'].sum()
     total_grade_points = result_df['grade_point'].sum()
@@ -243,17 +245,21 @@ async def get_result_html2(request: Request, session: str, semester: str, studen
                 result.fillna('', inplace=True)
                 student_name = eval(result['student_details'].iloc[0])[
                     'student_name']
+
+                # print(type(result['out_of_faculty'].iloc[0]))
                 total_gp = sum([get_grade_point(grade) * units for grade,
-                                units in zip(result['final_grade'], result['course_units'])])
+                                units, oof in zip(result['final_grade'], result['course_units'], result['out_of_faculty']) if not oof])
                 data = {'status': '', 'results': [], 'html': ''}
                 for index, row in result.iterrows():
                     # print(type(row['student_details']))
                     result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
-                                   row['course_units'], row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
+                                   row['course_units'] if not row['out_of_faculty'] else 0, row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
                     data['status'] = 'success'
                     data['results'].append(result_dict)
 
                 cgpa = calculate_cgpa(session, semester, student)
+                tch = sum([unit for unit, oof in zip(
+                    result['course_units'], result['out_of_faculty']) if not oof])
 
                 return templates.TemplateResponse("results2.html", {
                     "request": request,
@@ -262,9 +268,9 @@ async def get_result_html2(request: Request, session: str, semester: str, studen
                     "student": student,
                     "student_name": student_name,
                     "results": data['results'],
-                    "total_credit_hours": sum(result['course_units'].tolist()),
+                    "total_credit_hours": tch,
                     "total_grade_points": total_gp,
-                    "gpa": round(total_gp/sum(result['course_units'].tolist()), 2),
+                    "gpa": round(total_gp/tch, 2) if tch > 0 else 0,
                     "cgpa": round(cgpa, 2),
                 })
 
