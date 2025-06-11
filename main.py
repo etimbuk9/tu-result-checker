@@ -136,7 +136,12 @@ async def get_access_code(email: str, callbackUrl: str):
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
 
-    data = {"email": email, "amount": "100000", 'callback_url': callbackUrl}
+    data = {
+        "email": email,
+        "amount": "100000",
+        'callback_url': callbackUrl,
+        'split_code': 'SPL_DHW7LKoOeE',
+    }
 
     response = requests.post(
         "https://api.paystack.co/transaction/initialize",
