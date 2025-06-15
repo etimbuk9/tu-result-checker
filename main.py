@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +12,14 @@ import ssl
 from xhtml2pdf import pisa
 import pdfkit
 from io import BytesIO
+
+from cachetools import TTLCache
+from uuid import uuid4
+import json
+
+# Holds 1000 entries max, each expires after 15 minutes (900 seconds)
+result_cache = TTLCache(maxsize=1000, ttl=900)
+
 
 app = FastAPI()
 START_YEAR = 2021
@@ -222,64 +230,149 @@ async def get_result_html(session: str, semester: str, student: str):
     return {"detail": "Student result not found."}
 
 
+# @app.get("/results2/", response_class=HTMLResponse)
+# async def get_result_html2(request: Request, session: str, semester: str, student: str, reference: str):
+
+#     print(f"Session: {session}, Semester: {semester}, Student: {student}")
+
+#     if not session or not semester or not student:
+#         raise HTTPException(status_code=400, detail="Missing parameters")
+
+#     if '/' in session:
+#         session = str(session).replace('/', '-')
+
+#     url = dropbox_connect.get_result_url(session, semester)
+
+#     if reference != 'discountCode':
+#         valid_transaction = verify_transaction(reference)
+#     else:
+#         valid_transaction = {'status': True}
+
+#     if valid_transaction['status']:
+
+#         if url:
+#             result = dropbox_connect.get_student_result(url, student)
+#             student_name = ""
+#             # print(f"Result: {result}")
+#             if result is not None:
+#                 result.fillna('', inplace=True)
+#                 student_name = eval(result['student_details'].iloc[0])[
+#                     'student_name']
+
+#                 # print(type(result['out_of_faculty'].iloc[0]))
+#                 total_gp = sum([get_grade_point(grade) * units for grade,
+#                                 units, oof in zip(result['final_grade'], result['course_units'], result['out_of_faculty']) if not oof])
+#                 data = {'status': '', 'results': [], 'html': ''}
+#                 for index, row in result.iterrows():
+#                     # print(type(row['student_details']))
+#                     result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
+#                                    row['course_units'] if not row['out_of_faculty'] else 0, row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
+#                     data['status'] = 'success'
+#                     data['results'].append(result_dict)
+
+#                 cgpa = calculate_cgpa(session, semester, student)
+#                 tch = sum([unit for unit, oof in zip(
+#                     result['course_units'], result['out_of_faculty']) if not oof])
+
+#                 return templates.TemplateResponse("results2.html", {
+#                     "request": request,
+#                     "session": session,
+#                     "semester": semester,
+#                     "student": student,
+#                     "student_name": student_name,
+#                     "results": data['results'],
+#                     "total_credit_hours": tch,
+#                     "total_grade_points": total_gp,
+#                     "gpa": round(total_gp/tch, 2) if tch > 0 else 0,
+#                     "cgpa": round(cgpa, 2),
+#                 })
+
+#     return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
+
+
 @app.get("/results2/", response_class=HTMLResponse)
 async def get_result_html2(request: Request, session: str, semester: str, student: str, reference: str):
-
-    print(f"Session: {session}, Semester: {semester}, Student: {student}")
-
     if not session or not semester or not student:
         raise HTTPException(status_code=400, detail="Missing parameters")
 
-    if '/' in session:
-        session = str(session).replace('/', '-')
-
+    session = session.replace('/', '-')
     url = dropbox_connect.get_result_url(session, semester)
 
-    if reference != 'discountCode':
-        valid_transaction = verify_transaction(reference)
-    else:
-        valid_transaction = {'status': True}
+    valid_transaction = verify_transaction(
+        reference) if reference != 'discountCode' else {'status': True}
 
-    if valid_transaction['status']:
+    if not (valid_transaction['status'] and url):
+        return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
 
-        if url:
-            result = dropbox_connect.get_student_result(url, student)
-            student_name = ""
-            # print(f"Result: {result}")
-            if result is not None:
-                result.fillna('', inplace=True)
-                student_name = eval(result['student_details'].iloc[0])[
-                    'student_name']
+    result = dropbox_connect.get_student_result(url, student)
+    if result is None:
+        return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Result data not found.'})
 
-                # print(type(result['out_of_faculty'].iloc[0]))
-                total_gp = sum([get_grade_point(grade) * units for grade,
-                                units, oof in zip(result['final_grade'], result['course_units'], result['out_of_faculty']) if not oof])
-                data = {'status': '', 'results': [], 'html': ''}
-                for index, row in result.iterrows():
-                    # print(type(row['student_details']))
-                    result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
-                                   row['course_units'] if not row['out_of_faculty'] else 0, row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
-                    data['status'] = 'success'
-                    data['results'].append(result_dict)
+    result.fillna('', inplace=True)
+    student_name = eval(result['student_details'].iloc[0])['student_name']
 
-                cgpa = calculate_cgpa(session, semester, student)
-                tch = sum([unit for unit, oof in zip(
-                    result['course_units'], result['out_of_faculty']) if not oof])
+    results = []
+    total_gp = 0
+    total_ch = 0
 
-                return templates.TemplateResponse("results2.html", {
-                    "request": request,
-                    "session": session,
-                    "semester": semester,
-                    "student": student,
-                    "student_name": student_name,
-                    "results": data['results'],
-                    "total_credit_hours": tch,
-                    "total_grade_points": total_gp,
-                    "gpa": round(total_gp/tch, 2) if tch > 0 else 0,
-                    "cgpa": round(cgpa, 2),
-                })
+    for _, row in result.iterrows():
+        breakdown = ResultBreakdown(eval(row['breakdown']))
+        course_units = row['course_units']
+        is_oof = row['out_of_faculty']
+        units = course_units if not is_oof else 0
+        grade_point = get_grade_point(row['final_grade']) * units
+        total_gp += grade_point
+        total_ch += units
+        results.append([
+            f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
+            units,
+            row['total_score'],
+            row['final_grade'],
+            breakdown
+        ])
 
-    return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
+    cgpa = calculate_cgpa(session, semester, student)
+    gpa = round(total_gp / total_ch, 2) if total_ch > 0 else 0
+
+    # Generate ID and cache result
+    result_id = str(uuid4())
+    result_cache[result_id] = {
+        "session": session,
+        "semester": semester,
+        "student": student,
+        "student_name": student_name,
+        "results": results,
+        "total_credit_hours": total_ch,
+        "total_grade_points": total_gp,
+        "gpa": gpa,
+        "cgpa": round(cgpa, 2),
+    }
+
+    return RedirectResponse(url=f"/results2/view/{result_id}", status_code=302)
+
+
+@app.get("/results2/view/{result_id}", response_class=HTMLResponse)
+async def view_result(request: Request, result_id: str):
+    if result_id not in result_cache:
+        return templates.TemplateResponse("results2.html", {
+            "request": request,
+            "error": "Result expired or not found."
+        })
+
+    data = result_cache[result_id]
+
+    return templates.TemplateResponse("results2.html", {
+        "request": request,
+        "session": data['session'],
+        "semester": data['semester'],
+        "student": data['student'],
+        "student_name": data['student_name'],
+        "results": data['results'],
+        "total_credit_hours": data['total_credit_hours'],
+        "total_grade_points": data['total_grade_points'],
+        "gpa": data['gpa'],
+        "cgpa": data['cgpa'],
+    })
 
 
 def render_template(template_name: str, context: dict) -> str:
