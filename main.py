@@ -16,6 +16,10 @@ from io import BytesIO
 from cachetools import TTLCache
 from uuid import uuid4
 import json
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Holds 1000 entries max, each expires after 15 minutes (900 seconds)
 result_cache = TTLCache(maxsize=1000, ttl=900)
@@ -143,6 +147,24 @@ def calculate_cgpa(session, semester, student):
 async def get_access_code(email: str, callbackUrl: str):
     if not email:
         raise HTTPException(status_code=400, detail="Email is required")
+
+    query = str(callbackUrl).split('?')[-1]
+    query = query.replace('%2F', '-')
+    query = query.replace('%20', ' ')
+    query = str(query).split('&')
+    query = {k: v for k, v in (x.split('=') for x in query)}
+    print(query)
+
+    url = dropbox_connect.get_result_url(query['session'], query["semester"])
+
+    if url is None:
+        raise HTTPException(
+            status_code=404, detail="Semester's Result not found")
+
+    result = dropbox_connect.get_student_result(url, query['student'])
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Student result not found")
 
     data = {
         "email": email,

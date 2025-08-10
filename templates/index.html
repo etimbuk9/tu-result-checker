@@ -156,7 +156,8 @@
                     },
                   });
                 } else {
-                  alert("Invalid Student Number");
+                  console.log("Error Retrieving Results:", data.detail);
+                  alert(`Error Retrieving Results: ${data.detail}`);
                 }
               })
               .catch((error) => {
