@@ -23,6 +23,6 @@ jobs:
             cd /root/tu-result-checker
             git fetch --all
             git reset --hard origin/main
-            source venv/bin/activate
+            source myenv/bin/activate
             pip install -r requirements.txt
             sudo systemctl restart tu-result-checker
