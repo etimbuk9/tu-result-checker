@@ -1,0 +1,90 @@
+<html>
+  <head>
+    <style>
+      @page {
+        size: A4 landscape;
+        margin: 1.27cm;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size: 28px; margin-bottom: 5px">Topfaith University</h1>
+    <h4 style="font-size: 14px">Mkpatak, Akwa Ibom State</h4>
+    <hr />
+    <table>
+      <tr>
+        <td style="border: none; font-weight: bold">Student Name:</td>
+        <td style="border: none">{{ student_name }}</td>
+      </tr>
+      <tr>
+        <td style="border: none; font-weight: bold">Student Number:</td>
+        <td style="border: none">{{ student }}</td>
+      </tr>
+      <tr>
+        <td style="border: none; font-weight: bold">Session:</td>
+        <td style="border: none">{{ session }}</td>
+      </tr>
+      <tr>
+        <td style="border: none; font-weight: bold">Semester:</td>
+        <td style="border: none">{{ semester }}</td>
+      </tr>
+    </table>
+    <br /><br />
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align: left; width: 28%">Course</th>
+          <th style="text-align: left; width: 9%">Credit Unit</th>
+          <th style="text-align: left; width: 9%">Attendance</th>
+          <th style="text-align: left; width: 9%">Assignment</th>
+          <th style="text-align: left; width: 9%">MidSemester Test</th>
+          <th style="text-align: left; width: 9%">Presentation</th>
+          <th style="text-align: left; width: 9%">Exams</th>
+          <th style="text-align: left; width: 9%">Total</th>
+          <th style="text-align: left; width: 9%">Grade</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a,b,c,d,e in results %}
+        <tr>
+          <td style="word-wrap: normal; white-space: normal">{{ a }}</td>
+          <td>{{ b }}</td>
+          <td>{{ e.attendance }}</td>
+          <td>{{ e.assignment }}</td>
+          <td>{{ e.mid_sem_test }}</td>
+          <td>{{ e.class_presentation }}</td>
+          <td>{{ e.exam_score }}</td>
+          <td>{{ c }}</td>
+          <td>{{ d }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <br />
+    <hr />
+    <br />
+    <h3 style="font-size: 18px">Summary</h3>
+    <hr />
+
+    <table style="border: none; width: 50%">
+      <tbody>
+        <tr>
+          <td style="border: none; font-weight: bold">Total Credit Units:</td>
+          <td style="border: none">{{ total_credit_hours }}</td>
+        </tr>
+        <tr>
+          <td style="border: none; font-weight: bold">Total Grade Points:</td>
+          <td style="border: none">{{ total_grade_points }}</td>
+        </tr>
+        <tr>
+          <td style="border: none; font-weight: bold">GPA:</td>
+          <td style="border: none">{{ gpa }}</td>
+        </tr>
+        <tr>
+          <td style="border: none; font-weight: bold">CGPA:</td>
+          <td style="border: none">{{ cgpa }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>

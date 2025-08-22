@@ -5,171 +5,204 @@
     <title>Student Results</title>
     <style>
       @page {
-          size: A4 landscape;
-          margin: 1cm;
+        size: A4 landscape;
+        margin: 2.54cm;
       }
-  
+
       body {
-          font-family: DejaVu Sans, sans-serif;
+        font-family: DejaVu Sans, Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: white;
       }
-  
-      h1 {
-          color: darkgreen;
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        margin: 10px 0;
       }
-  
+
       p {
-          font-size: 14px;
+        font-size: 12px;
+        margin: 5px 0;
       }
+
       table {
         width: 100%;
         border-collapse: collapse;
-    }
+        margin: 10px 0;
+      }
 
-    th, td {
-        text-align: left;       /* Center horizontally */
+      th,
+      td {
+        text-align: left;
         padding: 8px;
-    }
-  </style>
+        border: 1px solid #ddd;
+      }
+
+      th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+      }
+
+      .results-table table {
+        width: auto;
+        table-layout: auto;
+      }
+
+      .results-table th,
+      .results-table td {
+        white-space: nowrap;
+        padding: 6px 8px;
+        font-size: 11px;
+      }
+
+      .results-table th:first-child,
+      .results-table td:first-child {
+        white-space: normal;
+        max-width: 200px;
+        min-width: 150px;
+      }
+
+      .header-info {
+        margin-bottom: 20px;
+      }
+
+      .student-info {
+        margin-bottom: 20px;
+      }
+
+      .results-table {
+        margin-bottom: 20px;
+      }
+
+      .summary-section {
+        margin-top: 20px;
+      }
+
+      .bold {
+        font-weight: bold;
+      }
+
+      hr {
+        border: none;
+        border-top: 1px solid #ddd;
+        margin: 15px 0;
+      }
+
+      .page-break {
+        page-break-before: always;
+      }
+    </style>
   </head>
-  <body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-6xl">
-      <!-- Spinner -->
-      <div
-        id="loadingSpinner"
-        class="fixed inset-0 flex items-center justify-center bg-white bg-opacity-60 z-50 hidden"
-      >
-        <div
-          class="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-500 border-solid"
-        ></div>
+  <body>
+    <div id="resultsPrint">
+      {% if results %}
+      <div class="header-info">
+        <h2 style="font-size: 24px; margin-bottom: 5px">Topfaith University</h2>
+        <h4 style="font-size: 16px; margin-top: 5px">
+          Mkpatak, Akwa Ibom State
+        </h4>
       </div>
 
-      <div id="resultsContent" class="text-gray-800 space-y-2 text-sm">
-        {% if results %}
-        <div id="resultsPrint">
-          <h2 style="font-size: x-large;">Topfaith University</h2>
-          <h4 style="font-size: medium;">Mkpatak, Akwa Ibom State</h4>
-          <hr class="my-2" />
-          <table>
-            <tr>
-              <td class="font-bold">Student Name:</td>
-              <td>{{ student_name }}</td>
-            </tr>
-            <tr>
-              <td class="font-bold">Student Number:</td>
-              <td>{{ student }}</td>
-            </tr>
-            <tr>
-              <td class="font-bold">Session:</td>
-              <td>{{ session }}</td>
-            </tr>
-            <tr>
-              <td class="font-bold">Semester:</td>
-              <td>{{ semester }}</td>
-            </tr>
-          </table>
-          <hr class="my-2" />
-          <table class="table-auto w-full mb-4">
-            <thead class="text-left">
-              <tr>
-                <th style="border-bottom: 1px;">Course</th>
-                <th style="border-bottom: 1px;">Credit Unit</th>
-                <th style="border-bottom: 1px;">Attendance</th>
-                <th style="border-bottom: 1px;">Assignment</th>
-                <th style="border-bottom: 1px;">MidSemester Test</th>
-                <th style="border-bottom: 1px;">Presentation</th>
-                <th style="border-bottom: 1px;">Exams</th>
-                <th style="border-bottom: 1px;">Total</th>
-                <th style="border-bottom: 1px;">Grade</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for a,b,c,d,e in results %}
-              <tr>
-                <td>{{ a }}</td>
-                <td>{{ b }}</td>
-                <td>{{ e.attendance }}</td>
-                <td>{{ e.assignment }}</td>
-                <td>{{ e.mid_sem_test }}</td>
-                <td>{{ e.class_presentation }}</td>
-                <td>{{ e.exam_score }}</td>
-                <td>{{ c }}</td>
-                <td>{{ d }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          <br />
-          <h3 style="font-size: medium;">Summary</h3>
-          <hr />
-          <br />
-          <table class="table-auto w-full mb-4">
-            <tbody>
-              <tr>
-                <td class="font-bold">Total Credit Units:</td>
-                <td>{{ total_credit_hours }}</td>
-              </tr>
-              <tr>
-                <td class="font-bold">Total Grade Points:</td>
-                <td>{{ total_grade_points }}</td>
-              </tr>
-              <tr>
-                <td class="font-bold">GPA:</td>
-                <td>{{ gpa }}</td>
-              </tr>
-              <tr>
-                <td class="font-bold">CGPA:</td>
-                <td>{{ cgpa }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <br />
-          <hr />
-          <br />
-        </div>
-        
-          {% else %}
-          <div class="flex justify-center items-center">
-            <p class="text-red-500">No results found or invalid response.</p>
-          </div>
-          <div class="flex justify-center">
-            <button
-              onclick="back_to_home()"
-              class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-            >
-              Back
-            </button>
-          </div>
-          {% endif%}
-        </div>
+      <hr />
+
+      <div class="student-info">
+        <table style="border: none">
+          <tr>
+            <td style="border: none; font-weight: bold">Student Name:</td>
+            <td style="border: none">{{ student_name }}</td>
+          </tr>
+          <tr>
+            <td style="border: none; font-weight: bold">Student Number:</td>
+            <td style="border: none">{{ student }}</td>
+          </tr>
+          <tr>
+            <td style="border: none; font-weight: bold">Session:</td>
+            <td style="border: none">{{ session }}</td>
+          </tr>
+          <tr>
+            <td style="border: none; font-weight: bold">Semester:</td>
+            <td style="border: none">{{ semester }}</td>
+          </tr>
+        </table>
       </div>
+
+      <hr />
+
+      <div class="results-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Course</th>
+              <th>Credit Unit</th>
+              <th>Attendance</th>
+              <th>Assignment</th>
+              <th>MidSemester Test</th>
+              <th>Presentation</th>
+              <th>Exams</th>
+              <th>Total</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a,b,c,d,e in results %}
+            <tr>
+              <td>{{ a }}</td>
+              <td>{{ b }}</td>
+              <td>{{ e.attendance }}</td>
+              <td>{{ e.assignment }}</td>
+              <td>{{ e.mid_sem_test }}</td>
+              <td>{{ e.class_presentation }}</td>
+              <td>{{ e.exam_score }}</td>
+              <td>{{ c }}</td>
+              <td>{{ d }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="summary-section">
+        <h3 style="font-size: 18px">Summary</h3>
+        <hr />
+
+        <table style="border: none; width: 50%">
+          <tbody>
+            <tr>
+              <td style="border: none; font-weight: bold">
+                Total Credit Units:
+              </td>
+              <td style="border: none">{{ total_credit_hours }}</td>
+            </tr>
+            <tr>
+              <td style="border: none; font-weight: bold">
+                Total Grade Points:
+              </td>
+              <td style="border: none">{{ total_grade_points }}</td>
+            </tr>
+            <tr>
+              <td style="border: none; font-weight: bold">GPA:</td>
+              <td style="border: none">{{ gpa }}</td>
+            </tr>
+            <tr>
+              <td style="border: none; font-weight: bold">CGPA:</td>
+              <td style="border: none">{{ cgpa }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+
+      {% else %}
+      <div style="text-align: center; padding: 50px">
+        <p style="color: red; font-size: 16px">
+          No results found or invalid response.
+        </p>
+      </div>
+      {% endif %}
     </div>
-
-    <script>
-      function downloadPDF(student) {
-        const element = document.getElementById("resultsPrint");
-        html2pdf()
-          .set({
-            margin: 1,
-            filename: `results_${student}_${new Date()
-              .toISOString()
-              .slice(0, 10)}.pdf`,
-            image: { type: "jpeg", quality: 0.98 },
-            html2canvas: {
-              scale: 2,
-              useCORS: true,
-              allowTaint: false,
-            },
-            jsPDF: { unit: "in", format: "a4", orientation: "landscape" },
-          })
-          .from(element)
-          .save();
-      }
-    </script>
-
-    <script>
-      function back_to_home() {
-        window.location.href = "/";
-      }
-    </script>
   </body>
 </html>

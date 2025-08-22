@@ -7,16 +7,16 @@ import dropbox_connect
 import requests
 from datetime import datetime as dt
 import pandas as pd
-import urllib
+import urllib.request
 import ssl
 from xhtml2pdf import pisa
-import pdfkit
 from io import BytesIO
 
 from cachetools import TTLCache
 from uuid import uuid4
 import json
 from dotenv import load_dotenv
+from fastapi.responses import StreamingResponse
 
 # Load environment variables from .env file
 load_dotenv()
@@ -409,7 +409,9 @@ def convert_html_to_pdf(source_html: str) -> bytes:
     pdf = pisa.CreatePDF(src=source_html, dest=result)
     if not pdf.err:
         return result.getvalue()
-    return None
+    else:
+        # Return empty bytes if PDF generation fails
+        return b""
 
 
 @app.get("/download-result/")
@@ -457,22 +459,17 @@ async def download_result(request: Request, session: str, semester: str, student
                 "cgpa": round(cgpa, 2),
             }
 
-            temp = render_template('report.html', context)
-            pdf_options = {
-                "page-size": "A4",
-                "orientation": "Landscape",
-                "encoding": "UTF-8",
-                "margin-top": "10mm",
-                "margin-bottom": "10mm",
-                "margin-left": "10mm",
-                "margin-right": "10mm",
-            }
+            temp = render_template('report2.html', context)
+            # Convert HTML to PDF using pisa
+            pdf_bytes = convert_html_to_pdf(temp)
 
-            pdf = pdfkit.from_string(temp, False, options=pdf_options)
-
-            return Response(content=pdf, media_type="application/pdf", headers={
-                "Content-Disposition": f"attachment; filename=result_{session}_{semester}_{student}.pdf"
-            })
+            if pdf_bytes:
+                return Response(content=pdf_bytes, media_type="application/pdf", headers={
+                    "Content-Disposition": f"attachment; filename=result_{session}_{semester}_{student}.pdf"
+                })
+            else:
+                raise HTTPException(
+                    status_code=500, detail="Failed to generate PDF")
 
     # return templates.TemplateResponse("results2.html", {
     #     "request": request,
