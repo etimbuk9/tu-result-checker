@@ -1,51 +1,31 @@
 import pytest
+import json
+import os
 from fastapi.testclient import TestClient
-from main import app, get_grade_point, calculate_cgpa, ResultBreakdown
-import pandas as pd
 from unittest.mock import patch, MagicMock
-import io
+import pandas as pd
 
-client = TestClient(app)
+# Set required env vars before importing main
+os.environ.setdefault('DROPBOX_KEY', 'test_key')
+os.environ.setdefault('PAYSTACK_KEY', 'Bearer test_paystack')
+os.environ.setdefault('ADMIN_KEY', 'test_admin_key')
 
-# Test data
+from main import app, load_config, save_config
+
+client = TestClient(app, follow_redirects=False)
+
 MOCK_RESULT_DATA = {
     'course_name': ['MTH101', 'CSC101'],
     'course_ccmas': ['MTH101', 'CSC101'],
     'course_title': ['Mathematics', 'Computer Science'],
     'course_units': [3, 2],
-    'total_score': [85, 75],
+    'total_score': [85.0, 75.0],
     'final_grade': ['A', 'B'],
     'out_of_faculty': [False, False],
-    'student_details': ['{"student_name": "John Doe"}', '{"student_name": "John Doe"}'],
+    'student_details': ['{"student_name": "JOHN DOE"}', '{"student_name": "JOHN DOE"}'],
     'breakdown': ['{"attendance": 10, "assignment": 15, "mid_sem_test": 20, "class_presentation": 5, "senate_recommends": 0, "exam_score": 35}',
                   '{"attendance": 8, "assignment": 12, "mid_sem_test": 15, "class_presentation": 5, "senate_recommends": 0, "exam_score": 35}']
 }
-
-
-def test_get_grade_point():
-    assert get_grade_point('A') == 5
-    assert get_grade_point('B') == 4
-    assert get_grade_point('C') == 3
-    assert get_grade_point('D') == 2
-    assert get_grade_point('E') == 1
-    assert get_grade_point('F') == 0
-
-
-def test_result_breakdown():
-    breakdown = ResultBreakdown({
-        'attendance': 10,
-        'assignment': 15,
-        'mid_sem_test': 20,
-        'class_presentation': 5,
-        'senate_recommends': 0,
-        'exam_score': 35
-    })
-    assert breakdown.attendance == 10
-    assert breakdown.assignment == 15
-    assert breakdown.mid_sem_test == 20
-    assert breakdown.class_presentation == 5
-    assert breakdown.senate_recommends == 0
-    assert breakdown.exam_score == 35
 
 
 @pytest.fixture
@@ -53,79 +33,171 @@ def mock_result_df():
     return pd.DataFrame(MOCK_RESULT_DATA)
 
 
+@pytest.fixture(autouse=True)
+def set_active_config(tmp_path, monkeypatch):
+    """Set up a temporary config file with active session/semester for tests."""
+    config_file = tmp_path / "config.json"
+    config_file.write_text('{"session": "2023-2024", "semester": "First Semester"}')
+    monkeypatch.setattr('main.CONFIG_PATH', str(config_file))
+
+
+def test_root_redirects_to_reassessment():
+    response = client.get("/")
+    assert response.status_code == 307
+    assert response.headers["location"] == "/reassessment/"
+
+
+def test_admin_panel_correct_key():
+    response = client.get("/admin/?key=test_admin_key")
+    assert response.status_code == 200
+
+
+def test_admin_panel_wrong_key():
+    response = client.get("/admin/?key=wrong_key")
+    assert response.status_code == 403
+
+
+def test_set_config():
+    response = client.post("/admin/set-config/", json={
+        "session": "2023-2024",
+        "semester": "First Semester",
+        "key": "test_admin_key"
+    })
+    assert response.status_code == 200
+    assert response.json()["status"] is True
+
+
+def test_set_config_wrong_key():
+    response = client.post("/admin/set-config/", json={
+        "session": "2023-2024",
+        "semester": "First Semester",
+        "key": "wrong_key"
+    })
+    assert response.status_code == 403
+
+
+def test_reassessment_home_active():
+    response = client.get("/reassessment/")
+    assert response.status_code == 200
+
+
 @patch('main.dropbox_connect.get_result_url')
 @patch('main.dropbox_connect.get_student_result')
-def test_get_result_html(mock_get_student_result, mock_get_result_url, mock_result_df):
-    mock_get_result_url.return_value = "mock_url"
-    mock_get_student_result.return_value = mock_result_df
+def test_get_reassessment_results(mock_get_result, mock_get_url, mock_result_df):
+    mock_get_url.return_value = "mock_url"
+    mock_get_result.return_value = mock_result_df
 
-    response = client.get(
-        "/results/?session=2021-2022&semester=First%20Semester&student=12345")
+    response = client.get("/reassessment/get-results/?student=202100001")
     assert response.status_code == 200
     data = response.json()
-    assert data['status'] == 'success'
-    assert len(data['results']) == 2
+    assert data["student_name"] == "JOHN DOE"
+    assert len(data["courses"]) == 2
 
 
-@patch('main.requests.get')
-def test_verify_transaction(mock_get):
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
-        'status': True, 'data': {'reference': 'test_ref'}}
-    mock_get.return_value = mock_response
-
-    # Test the function directly since it's not exposed as an endpoint
-    from main import verify_transaction
-    result = verify_transaction('test_ref')
-    assert result['status'] == True
-    assert result['data']['reference'] == 'test_ref'
+def test_get_reassessment_results_no_config(monkeypatch, tmp_path):
+    empty_config = tmp_path / "empty_config.json"
+    monkeypatch.setattr('main.CONFIG_PATH', str(empty_config))
+    response = client.get("/reassessment/get-results/?student=202100001")
+    assert response.status_code == 503
 
 
-@patch('main.dropbox_connect.get_code_url')
-@patch('main.urllib.request.urlopen')
-def test_confirm_discount_code(mock_urlopen, mock_get_code_url):
-    mock_get_code_url.return_value = "mock_url"
-
-    # Create a proper CSV string and mock a file-like object
-    class MockFile(io.BytesIO):
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            self.close()
-    csv_data = b"discountCode\nTEST123"
-    mock_file = MockFile(csv_data)
-    mock_urlopen.return_value = mock_file
-
-    response = client.get("/confirm-discount-code/?discount_code=TEST123")
+def test_select_courses():
+    response = client.post("/reassessment/select/", json={
+        "student": "202100001",
+        "student_name": "JOHN DOE",
+        "courses": [
+            {"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}
+        ]
+    })
     assert response.status_code == 200
-    assert response.json()['status'] == True
+    assert "uuid" in response.json()
+
+
+def test_select_courses_empty():
+    response = client.post("/reassessment/select/", json={
+        "student": "202100001",
+        "student_name": "JOHN DOE",
+        "courses": []
+    })
+    assert response.status_code == 400
+
+
+def test_complaint_form_valid_uuid():
+    # First create a cache entry
+    sel_response = client.post("/reassessment/select/", json={
+        "student": "202100001",
+        "student_name": "JOHN DOE",
+        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+    })
+    uuid = sel_response.json()["uuid"]
+    response = client.get(f"/reassessment/complaint/{uuid}")
+    assert response.status_code == 200
+
+
+def test_complaint_form_invalid_uuid():
+    response = client.get("/reassessment/complaint/nonexistent-uuid")
+    assert response.status_code == 404
 
 
 @patch('main.requests.post')
-def test_get_access_code(mock_post):
+def test_init_payment(mock_post):
+    # Set up cache entry first
+    sel_response = client.post("/reassessment/select/", json={
+        "student": "202100001",
+        "student_name": "JOHN DOE",
+        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+    })
+    uuid = sel_response.json()["uuid"]
+
     mock_response = MagicMock()
     mock_response.json.return_value = {
-        'status': True, 'data': {'authorization_url': 'test_url'}}
+        "status": True,
+        "data": {"access_code": "test_access_code"}
+    }
     mock_post.return_value = mock_response
 
-    response = client.get(
-        "/get-access-code/?email=test@example.com&callbackUrl=http://test.com")
+    response = client.post("/reassessment/init-payment/", json={
+        "uuid": uuid,
+        "complaints": {"MTH101": "Score seems incorrect"}
+    })
     assert response.status_code == 200
-    assert response.json()['status'] == True
+    assert response.json()["access_code"] == "test_access_code"
 
 
-def test_calculate_cgpa():
-    # Mock the necessary functions and data
-    with patch('main.dropbox_connect.get_result_url') as mock_get_url, \
-            patch('main.dropbox_connect.get_student_result') as mock_get_result:
+@patch('main.requests.get')
+@patch('main.dropbox_connect.save_reassessment')
+def test_reassessment_confirm_success(mock_save, mock_get):
+    # Create cache entry with complaints
+    sel_response = client.post("/reassessment/select/", json={
+        "student": "202100001",
+        "student_name": "JOHN DOE",
+        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+    })
+    uuid = sel_response.json()["uuid"]
+    # Add complaints to cache via init-payment
+    with patch('main.requests.post') as mock_post:
+        mock_post.return_value = MagicMock(json=lambda: {"status": True, "data": {"access_code": "ac"}})
+        client.post("/reassessment/init-payment/", json={"uuid": uuid, "complaints": {"MTH101": "Wrong score"}})
 
-        mock_get_url.return_value = "mock_url"
-        mock_get_result.return_value = pd.DataFrame(MOCK_RESULT_DATA)
+    mock_get.return_value = MagicMock(json=lambda: {
+        "status": True,
+        "data": {"status": "success", "reference": "test_ref"}
+    })
+    mock_save.return_value = None
 
-        cgpa = calculate_cgpa("2021-2022", "First Semester", "12345")
-        assert isinstance(cgpa, float)
-        assert 0 <= cgpa <= 5.0
+    response = client.get(f"/reassessment/confirm/?uuid={uuid}&reference=test_ref")
+    assert response.status_code == 200
+    mock_save.assert_called_once()
+
+
+@patch('main.requests.get')
+def test_reassessment_confirm_payment_failed(mock_get):
+    mock_get.return_value = MagicMock(json=lambda: {
+        "status": True,
+        "data": {"status": "failed"}
+    })
+    response = client.get("/reassessment/confirm/?uuid=nonexistent&reference=bad_ref")
+    assert response.status_code == 200  # renders error template, not 4xx
 
 
 if __name__ == '__main__':
