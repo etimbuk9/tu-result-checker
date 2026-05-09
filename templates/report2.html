@@ -34,28 +34,28 @@
       <thead>
         <tr>
           <th style="text-align: left; width: 28%">Course</th>
-          <th style="text-align: left; width: 9%">Credit Unit</th>
-          <th style="text-align: left; width: 9%">Attendance</th>
-          <th style="text-align: left; width: 9%">Assignment</th>
-          <th style="text-align: left; width: 9%">MidSemester Test</th>
-          <th style="text-align: left; width: 9%">Presentation</th>
-          <th style="text-align: left; width: 9%">Exams</th>
-          <th style="text-align: left; width: 9%">Total</th>
-          <th style="text-align: left; width: 9%">Grade</th>
+          <th style="text-align: right; width: 9%">Credit Unit</th>
+          <th style="text-align: right; width: 9%">Attendance</th>
+          <th style="text-align: right; width: 9%">Assignment</th>
+          <th style="text-align: right; width: 9%">MidSemester Test</th>
+          <th style="text-align: right; width: 9%">Presentation</th>
+          <th style="text-align: right; width: 9%">Exams</th>
+          <th style="text-align: right; width: 9%">Total</th>
+          <th style="text-align: center; width: 9%">Grade</th>
         </tr>
       </thead>
       <tbody>
         {% for a,b,c,d,e in results %}
         <tr>
           <td style="word-wrap: normal; white-space: normal">{{ a }}</td>
-          <td>{{ b }}</td>
-          <td>{{ e.attendance }}</td>
-          <td>{{ e.assignment }}</td>
-          <td>{{ e.mid_sem_test }}</td>
-          <td>{{ e.class_presentation }}</td>
-          <td>{{ e.exam_score }}</td>
-          <td>{{ c }}</td>
-          <td>{{ d }}</td>
+          <td style="text-align: right">{{ b }}</td>
+          <td style="text-align: right">{{ e.attendance }}</td>
+          <td style="text-align: right">{{ e.assignment }}</td>
+          <td style="text-align: right">{{ e.mid_sem_test }}</td>
+          <td style="text-align: right">{{ e.class_presentation }}</td>
+          <td style="text-align: right">{{ e.exam_score }}</td>
+          <td style="text-align: right">{{ c }}</td>
+          <td style="text-align: center">{{ d }}</td>
         </tr>
         {% endfor %}
       </tbody>
