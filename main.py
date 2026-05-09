@@ -207,8 +207,8 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
     result_cache[f"reassessment:{body.uuid}"] = entry
     amount_kobo = 600000 * len(entry["courses"])
     email = f"{entry['student_no']}@topfaith.edu.ng"
-    callback_url = str(request.base_url) + \
-        f"reassessment/confirm/?uuid={body.uuid}"
+    base_url = os.getenv('BASE_URL', str(request.base_url)).rstrip('/')
+    callback_url = f"{base_url}/reassessment/confirm/?uuid={body.uuid}"
     custom_info = [
         {
             "display_name": "Student Number 202XXXXXX",

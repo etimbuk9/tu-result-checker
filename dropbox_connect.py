@@ -10,7 +10,7 @@ from datetime import datetime
 load_dotenv()
 
 headers = {
-    'Authorization': os.getenv('PAYSTACK_KEY') if os.getenv('DEBUG') == 'False' else os.getenv('PS_TEST_KEY'),
+    'Authorization': os.getenv('PAYSTACK_KEY') if os.getenv('DEBUG') != 'True' else os.getenv('PS_TEST_KEY'),
     # 'Authorization': os.getenv('PS_TEST_KEY'),
     # 'Cache-Control': 'max-age=0',
     # 'Origin': 'https://www.example.com',
