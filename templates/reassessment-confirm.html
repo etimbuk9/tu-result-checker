@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Topfaith University | Reassessment Confirmation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 flex items-center justify-center min-h-screen py-10">
+    <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-4xl">
+      <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">
+        Topfaith University &mdash; Result Reassessment Request
+      </h2>
+
+      {% if error %}
+      <!-- Error State -->
+      <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-6 mb-6">
+        <h3 class="text-lg font-bold text-red-700 mb-2">Payment Verification Failed</h3>
+        <p class="text-red-600 mb-4">{{ error }}</p>
+        <a href="/reassessment/" class="inline-block bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors">
+          Start Over
+        </a>
+      </div>
+
+      {% else %}
+      <!-- Success State -->
+      <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 mb-6">
+        <p class="text-green-700 font-semibold">Payment Confirmed</p>
+      </div>
+
+      <!-- Summary Table -->
+      <div class="mb-8">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">Request Summary</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <tbody class="divide-y divide-gray-200">
+              <tr class="bg-gray-50">
+                <td class="px-4 py-3 font-semibold text-gray-700 w-1/3">Student Name</td>
+                <td class="px-4 py-3 text-gray-800">{{ student_name }}</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-semibold text-gray-700">Student Number</td>
+                <td class="px-4 py-3 text-gray-800 font-mono">{{ student_no }}</td>
+              </tr>
+              <tr class="bg-gray-50">
+                <td class="px-4 py-3 font-semibold text-gray-700">Session</td>
+                <td class="px-4 py-3 text-gray-800">{{ session }}</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-semibold text-gray-700">Semester</td>
+                <td class="px-4 py-3 text-gray-800">{{ semester }}</td>
+              </tr>
+              <tr class="bg-gray-50">
+                <td class="px-4 py-3 font-semibold text-gray-700">Payment Reference</td>
+                <td class="px-4 py-3 text-gray-800 font-mono text-sm">{{ reference }}</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-semibold text-gray-700">Amount Paid</td>
+                <td class="px-4 py-3 text-gray-800 font-semibold">₦{{ '{:,}'.format(amount_paid) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Courses Section -->
+      <div class="mb-8">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">Courses Submitted for Reassessment</h3>
+        <div class="bg-gray-50 rounded-lg p-4">
+          <div class="space-y-2">
+            {% for course in courses %}
+            <div class="flex items-start">
+              <span class="inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium mr-3 mt-0.5 flex-shrink-0">
+                {{ loop.index }}
+              </span>
+              <div>
+                <p class="font-semibold text-gray-800">{{ course.course_name }}</p>
+                <p class="text-sm text-gray-600">{{ course.course_title }}</p>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <p class="text-xs text-gray-500 mt-4">Total Courses: {{ num_courses }}</p>
+        </div>
+      </div>
+
+      <!-- Message -->
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <p class="text-sm text-blue-800">
+          Your request has been submitted successfully. The registry will contact you with further details.
+        </p>
+      </div>
+
+      <!-- Action Button -->
+      <div class="flex justify-center">
+        <a href="/reassessment/" class="bg-blue-600 text-white px-8 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+          Start Over
+        </a>
+      </div>
+
+      {% endif %}
+    </div>
+  </body>
+</html>
