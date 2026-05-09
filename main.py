@@ -32,9 +32,9 @@ def load_config() -> dict:
     return {}
 
 
-def save_config(session: str, semester: str) -> None:
+def save_config(session: str, semester: str, amount_per_course: int) -> None:
     with open(CONFIG_PATH, 'w') as f:
-        json.dump({'session': session, 'semester': semester}, f)
+        json.dump({'session': session, 'semester': semester, 'amount_per_course': amount_per_course}, f)
 
 
 app = FastAPI()
@@ -77,6 +77,7 @@ class ComplaintsRequest(BaseModel):
 class AdminConfigRequest(BaseModel):
     session: str
     semester: str
+    amount_per_course: int
     key: str
 
 
@@ -103,6 +104,7 @@ async def admin_panel(request: Request, key: str = ""):
         "semesters": SEMESTERS,
         "current_session": config.get("session", ""),
         "current_semester": config.get("semester", ""),
+        "current_amount": config.get("amount_per_course", 6000),
         "admin_key": key,
     })
 
@@ -115,8 +117,10 @@ async def set_config(body: AdminConfigRequest):
         raise HTTPException(status_code=400, detail="Invalid session")
     if body.semester not in SEMESTERS:
         raise HTTPException(status_code=400, detail="Invalid semester")
-    save_config(body.session, body.semester)
-    return {"status": True, "session": body.session, "semester": body.semester}
+    if body.amount_per_course <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    save_config(body.session, body.semester, body.amount_per_course)
+    return {"status": True, "session": body.session, "semester": body.semester, "amount_per_course": body.amount_per_course}
 
 
 @app.get("/reassessment/", response_class=HTMLResponse)
@@ -186,6 +190,9 @@ async def complaint_form(request: Request, uuid: str):
         raise HTTPException(
             status_code=404, detail="Session expired or not found")
     n = len(entry["courses"])
+    amount_per_course = entry.get("amount_per_course") or load_config().get("amount_per_course", 6000)
+    entry["amount_per_course"] = amount_per_course
+    result_cache[f"reassessment:{uuid}"] = entry
     return templates.TemplateResponse(request, "reassessment-complaint.html", {
         "uuid": uuid,
         "student_no": entry["student_no"],
@@ -193,8 +200,8 @@ async def complaint_form(request: Request, uuid: str):
         "session": entry["session"],
         "semester": entry["semester"],
         "courses": entry["courses"],
-        "amount_naira": 6000 * n,
-        "amount_kobo": 600000 * n,
+        "amount_naira": amount_per_course * n,
+        "amount_kobo": amount_per_course * 100 * n,
     })
 
 
@@ -205,7 +212,7 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
         raise HTTPException(status_code=404, detail="Session expired")
     entry["complaints"] = body.complaints
     result_cache[f"reassessment:{body.uuid}"] = entry
-    amount_kobo = 600000 * len(entry["courses"])
+    amount_kobo = entry.get("amount_per_course", 6000) * 100 * len(entry["courses"])
     email = f"{entry['student_no']}@topfaith.edu.ng"
     base_url = os.getenv('BASE_URL', str(request.base_url)).rstrip('/')
     callback_url = f"{base_url}/reassessment/confirm/?uuid={body.uuid}"

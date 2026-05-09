@@ -61,6 +61,7 @@ def test_set_config():
     response = client.post("/admin/set-config/", json={
         "session": "2023-2024",
         "semester": "First Semester",
+        "amount_per_course": 6000,
         "key": "test_admin_key"
     })
     assert response.status_code == 200
@@ -71,6 +72,7 @@ def test_set_config_wrong_key():
     response = client.post("/admin/set-config/", json={
         "session": "2023-2024",
         "semester": "First Semester",
+        "amount_per_course": 6000,
         "key": "wrong_key"
     })
     assert response.status_code == 403
