@@ -233,6 +233,14 @@
         div.appendChild(document.createTextNode(str));
         return div.innerHTML;
       }
+
+      // Auto-load results if ?student= is in the URL (e.g. coming back from complaint page)
+      const params = new URLSearchParams(window.location.search);
+      const prefilledStudent = params.get('student');
+      if (prefilledStudent) {
+        studentNumberInput.value = prefilledStudent;
+        loadBtn.click();
+      }
     </script>
     {% endif %}
   </body>
