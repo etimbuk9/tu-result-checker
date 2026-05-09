@@ -59,6 +59,8 @@ class CourseSelection(BaseModel):
     course_name: str
     course_title: str
     course_units: int
+    total_score: float = 0.0
+    final_grade: str = ""
 
 
 class SelectionRequest(BaseModel):
@@ -96,8 +98,7 @@ async def admin_panel(request: Request, key: str = ""):
     if not ADMIN_KEY or key != ADMIN_KEY:
         raise HTTPException(status_code=403, detail="Forbidden")
     config = load_config()
-    return templates.TemplateResponse("admin.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "admin.html", {
         "sessions": SESSIONS,
         "semesters": SEMESTERS,
         "current_session": config.get("session", ""),
@@ -121,8 +122,7 @@ async def set_config(body: AdminConfigRequest):
 @app.get("/reassessment/", response_class=HTMLResponse)
 async def reassessment_home(request: Request):
     config = load_config()
-    return templates.TemplateResponse("reassessment.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "reassessment.html", {
         "session": config.get("session", ""),
         "semester": config.get("semester", ""),
         "active": bool(config.get("session") and config.get("semester")),
@@ -180,8 +180,7 @@ async def complaint_form(request: Request, uuid: str):
     if entry is None:
         raise HTTPException(status_code=404, detail="Session expired or not found")
     n = len(entry["courses"])
-    return templates.TemplateResponse("reassessment-complaint.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "reassessment-complaint.html", {
         "uuid": uuid,
         "student_no": entry["student_no"],
         "student_name": entry["student_name"],
@@ -224,14 +223,12 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
 async def reassessment_confirm(request: Request, uuid: str, reference: str):
     entry = result_cache.get(f"reassessment:{uuid}")
     if entry is None:
-        return templates.TemplateResponse("reassessment-confirm.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "reassessment-confirm.html", {
             "error": "Session expired. Please start over.",
         })
     verification = verify_transaction(reference)
     if not verification.get("status") or verification.get("data", {}).get("status") != "success":
-        return templates.TemplateResponse("reassessment-confirm.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "reassessment-confirm.html", {
             "error": "Payment could not be verified.",
         })
     rows = []
@@ -251,13 +248,11 @@ async def reassessment_confirm(request: Request, uuid: str, reference: str):
     try:
         dropbox_connect.save_reassessment(df, entry["session"], entry["semester"])
     except Exception:
-        return templates.TemplateResponse("reassessment-confirm.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "reassessment-confirm.html", {
             "error": f"Your payment was received but we could not save your request. Please contact the registry with your payment reference: {reference}",
         })
     result_cache.pop(f"reassessment:{uuid}", None)
-    return templates.TemplateResponse("reassessment-confirm.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "reassessment-confirm.html", {
         "student_name": entry["student_name"],
         "student_no": entry["student_no"],
         "session": entry["session"],

@@ -192,11 +192,21 @@ def test_reassessment_confirm_success(mock_save, mock_get):
 
 @patch('main.requests.get')
 def test_reassessment_confirm_payment_failed(mock_get):
+    # Create a real cache entry so the route reaches verify_transaction
+    sel_response = client.post("/reassessment/select/", json={
+        "student": "202100001",
+        "student_name": "JOHN DOE",
+        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+    })
+    uuid = sel_response.json()["uuid"]
+
+    # Mock the payment API to return a failure
     mock_get.return_value = MagicMock(json=lambda: {
         "status": True,
         "data": {"status": "failed"}
     })
-    response = client.get("/reassessment/confirm/?uuid=nonexistent&reference=bad_ref")
+
+    response = client.get(f"/reassessment/confirm/?uuid={uuid}&reference=bad_ref")
     assert response.status_code == 200  # renders error template, not 4xx
 
 
