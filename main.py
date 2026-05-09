@@ -1,4 +1,5 @@
 import ast
+import logging
 import os
 import json
 from fastapi import FastAPI, HTTPException, Request
@@ -18,6 +19,9 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Holds 1000 entries max, each expires after 15 minutes (900 seconds)
 result_cache = TTLCache(maxsize=1000, ttl=900)
 
@@ -34,7 +38,8 @@ def load_config() -> dict:
 
 def save_config(session: str, semester: str, amount_per_course: int) -> None:
     with open(CONFIG_PATH, 'w') as f:
-        json.dump({'session': session, 'semester': semester, 'amount_per_course': amount_per_course}, f)
+        json.dump({'session': session, 'semester': semester,
+                  'amount_per_course': amount_per_course}, f)
 
 
 app = FastAPI()
@@ -118,7 +123,8 @@ async def set_config(body: AdminConfigRequest):
     if body.semester not in SEMESTERS:
         raise HTTPException(status_code=400, detail="Invalid semester")
     if body.amount_per_course <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+        raise HTTPException(
+            status_code=400, detail="Amount must be greater than zero")
     save_config(body.session, body.semester, body.amount_per_course)
     return {"status": True, "session": body.session, "semester": body.semester, "amount_per_course": body.amount_per_course}
 
@@ -190,7 +196,8 @@ async def complaint_form(request: Request, uuid: str):
         raise HTTPException(
             status_code=404, detail="Session expired or not found")
     n = len(entry["courses"])
-    amount_per_course = entry.get("amount_per_course") or load_config().get("amount_per_course", 6000)
+    amount_per_course = entry.get(
+        "amount_per_course") or load_config().get("amount_per_course", 6000)
     entry["amount_per_course"] = amount_per_course
     result_cache[f"reassessment:{uuid}"] = entry
     return templates.TemplateResponse(request, "reassessment-complaint.html", {
@@ -212,7 +219,8 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
         raise HTTPException(status_code=404, detail="Session expired")
     entry["complaints"] = body.complaints
     result_cache[f"reassessment:{body.uuid}"] = entry
-    amount_kobo = entry.get("amount_per_course", 6000) * 100 * len(entry["courses"])
+    amount_kobo = entry.get("amount_per_course", 6000) * \
+        100 * len(entry["courses"])
     email = f"{entry['student_no']}@topfaith.edu.ng"
     base_url = os.getenv('BASE_URL', str(request.base_url)).rstrip('/')
     callback_url = f"{base_url}/reassessment/confirm/?uuid={body.uuid}"
@@ -254,8 +262,10 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
         json=payload,
     )
     data = response.json()
-
+    logger.info("Paystack init response | student=%s amount_kobo=%s status=%s message=%s",
+                entry['student_no'], amount_kobo, data.get("status"), data.get("message"))
     if not data.get("status"):
+        logger.error("Paystack init failed | full response: %s", data)
         raise HTTPException(
             status_code=502, detail="Payment initialisation failed")
     return {"access_code": data["data"]["access_code"]}
