@@ -225,21 +225,22 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
         "email": email,
         "amount": str(amount_kobo),
         "callback_url": callback_url,
-        # "split": {
-        #     "type": "flat",
-        #     "bearer_type": "account",
-        #     "subaccounts": [
-        #         {
-        #             "subaccount": "ACCT_hm8ktsr7sd7xtxr",
-        #             # 16.67% to school minus 300 naira fee
-        #             "share": int(amount_kobo/6) - 30000,
-        #         },
-        #     ]
-        # },
         "metadata": {
             "custom_fields": custom_info
         },
     }
+    if not os.getenv('DEBUG') == 'True':
+        payload['split'] = {
+            "type": "flat",
+            "bearer_type": "account",
+            "subaccounts": [
+                    {
+                        "subaccount": "ACCT_hm8ktsr7sd7xtxr",
+                        # 16.67% to school minus 300 naira fee
+                        "share": int(amount_kobo/6) - 30000,
+                    },
+            ]
+        }
     response = requests.post(
         "https://api.paystack.co/transaction/initialize",
         headers=dropbox_connect.headers,
