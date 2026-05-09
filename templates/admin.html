@@ -8,8 +8,20 @@
   <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-md">
       <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">
-        Admin Configuration
+        Reassessment Admin Panel
       </h2>
+
+      {% if current_session %}
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <p class="text-blue-800 font-medium" id="currentConfigText">Active: {{ current_session }} — {{ current_semester }}</p>
+      </div>
+      {% else %}
+      <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+        <p class="text-gray-600" id="currentConfigText">No active period set</p>
+      </div>
+      {% endif %}
+
+      <input type="hidden" id="adminKey" value="{{ admin_key }}">
 
       <form id="configForm" class="space-y-4">
         <div>
@@ -49,6 +61,7 @@
         </div>
 
         <button
+          id="saveBtn"
           type="submit"
           class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700"
         >
@@ -59,7 +72,10 @@
           <div class="loader"></div>
         </div>
 
-        <div id="message" class="hidden rounded-lg p-3 text-center text-sm font-semibold"></div>
+        <div id="successMsg" class="hidden bg-green-50 border border-green-200 rounded-lg p-3 text-green-800 text-sm mt-4">
+          Configuration saved successfully.
+        </div>
+        <div id="errorMsg" class="hidden bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 text-sm mt-4"></div>
 
         <style>
           .loader {
@@ -84,16 +100,17 @@
     </div>
 
     <script>
-      const adminKey = "{{ admin_key }}";
-
       document
         .getElementById("configForm")
         .addEventListener("submit", function (e) {
           e.preventDefault();
 
+          const adminKey = document.getElementById("adminKey").value;
           const session = document.getElementById("session").value;
           const semester = document.getElementById("semester").value;
-          const messageDiv = document.getElementById("message");
+          const successMsg = document.getElementById("successMsg");
+          const errorMsg = document.getElementById("errorMsg");
+          const saveBtn = document.getElementById("saveBtn");
           const spinner = document.getElementById("spinner");
 
           if (!session || !semester) {
@@ -101,6 +118,7 @@
             return;
           }
 
+          saveBtn.disabled = true;
           spinner.style.display = "flex";
 
           const payload = {
@@ -121,34 +139,53 @@
             .then((response) => response.json())
             .then((data) => {
               spinner.style.display = "none";
+              saveBtn.disabled = false;
               if (data.status) {
-                showMessage("Configuration saved successfully", "success");
+                successMsg.classList.remove("hidden");
+                errorMsg.classList.add("hidden");
+                const currentConfigText = document.getElementById("currentConfigText");
+                currentConfigText.textContent = "Active: " + session + " — " + semester;
+                setTimeout(() => {
+                  successMsg.classList.add("hidden");
+                }, 3000);
               } else {
-                showMessage("Error saving configuration", "error");
+                errorMsg.textContent = "Error saving configuration";
+                errorMsg.classList.remove("hidden");
+                successMsg.classList.add("hidden");
+                setTimeout(() => {
+                  errorMsg.classList.add("hidden");
+                }, 3000);
               }
             })
             .catch((error) => {
               spinner.style.display = "none";
+              saveBtn.disabled = false;
               console.error("Error:", error);
-              showMessage("An error occurred", "error");
+              errorMsg.textContent = "An error occurred";
+              errorMsg.classList.remove("hidden");
+              successMsg.classList.add("hidden");
+              setTimeout(() => {
+                errorMsg.classList.add("hidden");
+              }, 3000);
             });
         });
 
       function showMessage(text, type) {
-        const messageDiv = document.getElementById("message");
-        messageDiv.textContent = text;
-        messageDiv.classList.remove("hidden");
+        const successMsg = document.getElementById("successMsg");
+        const errorMsg = document.getElementById("errorMsg");
 
         if (type === "success") {
-          messageDiv.classList.remove("bg-red-100", "text-red-700");
-          messageDiv.classList.add("bg-green-100", "text-green-700");
+          successMsg.classList.remove("hidden");
+          errorMsg.classList.add("hidden");
         } else {
-          messageDiv.classList.remove("bg-green-100", "text-green-700");
-          messageDiv.classList.add("bg-red-100", "text-red-700");
+          errorMsg.textContent = text;
+          errorMsg.classList.remove("hidden");
+          successMsg.classList.add("hidden");
         }
 
         setTimeout(() => {
-          messageDiv.classList.add("hidden");
+          successMsg.classList.add("hidden");
+          errorMsg.classList.add("hidden");
         }, 3000);
       }
     </script>
