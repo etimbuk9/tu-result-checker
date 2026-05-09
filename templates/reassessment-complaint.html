@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Topfaith University | Result Reassessment &mdash; Complaint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.paystack.co/v2/inline.js"></script>
+  </head>
+  <body class="bg-gray-100 flex items-center justify-center min-h-screen py-10">
+    <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-4xl">
+
+      <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">
+        Topfaith University &mdash; Result Reassessment Request
+      </h2>
+
+      <!-- Student info -->
+      <div class="mb-6 overflow-x-auto">
+        <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+          <tbody>
+            <tr class="border-b border-gray-200">
+              <td class="px-4 py-2 font-medium text-gray-600 bg-gray-50 w-1/3">Student Name</td>
+              <td class="px-4 py-2 text-gray-800">{{ student_name }}</td>
+            </tr>
+            <tr class="border-b border-gray-200">
+              <td class="px-4 py-2 font-medium text-gray-600 bg-gray-50">Student Number</td>
+              <td class="px-4 py-2 text-gray-800 font-mono">{{ student_no }}</td>
+            </tr>
+            <tr class="border-b border-gray-200">
+              <td class="px-4 py-2 font-medium text-gray-600 bg-gray-50">Session</td>
+              <td class="px-4 py-2 text-gray-800">{{ session }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2 font-medium text-gray-600 bg-gray-50">Semester</td>
+              <td class="px-4 py-2 text-gray-800">{{ semester }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Instructions -->
+      <p class="text-sm text-gray-600 mb-4">
+        Please provide a brief reason for requesting reassessment for each course below.
+      </p>
+
+      <!-- Courses table -->
+      <div class="overflow-x-auto mb-6">
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="bg-blue-600 text-white">
+              <th class="px-3 py-2 text-left rounded-tl-lg">Course Code</th>
+              <th class="px-3 py-2 text-left">Course Title</th>
+              <th class="px-3 py-2 text-center">Units</th>
+              <th class="px-3 py-2 text-center">Score</th>
+              <th class="px-3 py-2 text-center">Grade</th>
+              <th class="px-3 py-2 text-left rounded-tr-lg">Reason for Complaint</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            {% for course in courses %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-3 py-2 font-mono align-top">{{ course['course_name'] }}</td>
+              <td class="px-3 py-2 align-top">{{ course['course_title'] }}</td>
+              <td class="px-3 py-2 text-center align-top">{{ course['course_units'] }}</td>
+              <td class="px-3 py-2 text-center align-top">{{ course['total_score'] }}</td>
+              <td class="px-3 py-2 text-center font-semibold align-top">{{ course['final_grade'] }}</td>
+              <td class="px-3 py-2 align-top">
+                <textarea
+                  id="complaint_{{ course['course_name'] }}"
+                  name="complaint_{{ course['course_name'] }}"
+                  data-course="{{ course['course_name'] }}"
+                  rows="2"
+                  required
+                  placeholder="Describe your concern..."
+                  class="w-full min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
+                ></textarea>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Payment footer -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-2">
+        <p class="text-base font-semibold text-gray-700">
+          Total Amount: <span class="text-blue-600">&#8358;{{ '{:,}'.format(amount_naira) }}</span>
+        </p>
+
+        <div class="flex flex-col items-end gap-2">
+          <div id="errorMsg" class="hidden bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-2 text-sm max-w-sm text-right"></div>
+
+          <div class="flex items-center gap-3">
+            <div id="spinner" class="hidden">
+              <div class="animate-spin rounded-full h-6 w-6 border-t-4 border-blue-500 border-solid"></div>
+            </div>
+            <button
+              id="payBtn"
+              class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Pay &#8358;{{ '{:,}'.format(amount_naira) }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+      (function () {
+        const payBtn = document.getElementById('payBtn');
+        const spinner = document.getElementById('spinner');
+        const errorMsg = document.getElementById('errorMsg');
+
+        const UUID = "{{ uuid }}";
+
+        function showError(msg) {
+          errorMsg.textContent = msg;
+          errorMsg.classList.remove('hidden');
+        }
+
+        function hideError() {
+          errorMsg.textContent = '';
+          errorMsg.classList.add('hidden');
+        }
+
+        function setLoading(loading) {
+          payBtn.disabled = loading;
+          if (loading) {
+            spinner.classList.remove('hidden');
+          } else {
+            spinner.classList.add('hidden');
+          }
+        }
+
+        payBtn.addEventListener('click', function () {
+          hideError();
+
+          // Collect all textareas
+          const textareas = document.querySelectorAll('textarea[data-course]');
+          const complaints = {};
+          let valid = true;
+
+          textareas.forEach(function (ta) {
+            const val = ta.value.trim();
+            if (!val) {
+              valid = false;
+            }
+            complaints[ta.dataset.course] = val;
+          });
+
+          if (!valid) {
+            showError('Please provide a reason for each selected course.');
+            return;
+          }
+
+          setLoading(true);
+
+          fetch('/reassessment/init-payment/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              uuid: UUID,
+              complaints: complaints
+            })
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                return response.json().then(function (errData) {
+                  throw new Error(errData.detail || 'Failed to initialise payment. Please try again.');
+                }).catch(function (e) {
+                  if (e instanceof SyntaxError) {
+                    throw new Error('Failed to initialise payment. Please try again.');
+                  }
+                  throw e;
+                });
+              }
+              return response.json();
+            })
+            .then(function (data) {
+              if (!data.access_code) {
+                throw new Error('No access code returned from server.');
+              }
+
+              const paystack = new PaystackPop();
+              paystack.resumeTransaction(data.access_code, {
+                onSuccess: function (transaction) {
+                  setLoading(true);
+                  window.location.href =
+                    '/reassessment/confirm/?uuid=' + encodeURIComponent(UUID) +
+                    '&reference=' + encodeURIComponent(transaction.reference);
+                },
+                onCancel: function () {
+                  setLoading(false);
+                },
+                onError: function (error) {
+                  showError('Payment error: ' + (error.message || 'Unknown error'));
+                  setLoading(false);
+                }
+              });
+            })
+            .catch(function (err) {
+              showError(err.message || 'An unexpected error occurred. Please try again.');
+              setLoading(false);
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>
