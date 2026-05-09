@@ -48,7 +48,7 @@
         </div>
       </div>
 
-      <div id="resultsSection" style="display: none;" class="mt-6">
+      <div id="resultsSection" class="hidden mt-6">
         <p class="text-sm text-gray-600 mb-1">Results for:</p>
         <p id="studentNameDisplay" class="text-lg font-semibold text-gray-800 mb-4"></p>
 
@@ -108,10 +108,12 @@
 
       function showSpinner() {
         spinner.classList.remove('hidden');
+        loadBtn.disabled = true;
       }
 
       function hideSpinner() {
         spinner.classList.add('hidden');
+        loadBtn.disabled = false;
       }
 
       function updateNextBtn() {
@@ -126,8 +128,13 @@
           return;
         }
 
+        if (!/^\d+$/.test(studentNumber)) {
+          showError('Student number must contain only digits.');
+          return;
+        }
+
         hideError();
-        resultsSection.style.display = 'none';
+        resultsSection.classList.add('hidden');
         showSpinner();
 
         fetch('/reassessment/get-results/?student=' + encodeURIComponent(studentNumber))
@@ -167,7 +174,7 @@
             });
 
             updateNextBtn();
-            resultsSection.style.display = '';
+            resultsSection.classList.remove('hidden');
           })
           .catch(function (err) {
             hideSpinner();
