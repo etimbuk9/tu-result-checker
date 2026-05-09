@@ -86,6 +86,23 @@ def get_student_result(url, student_no):
     return None
 
 
+def save_reassessment(complaints_df, session, semester):
+    from datetime import datetime
+
+    # Convert DataFrame to CSV bytes
+    csv_bytes = complaints_df.to_csv(index=False).encode('utf-8')
+
+    # Generate timestamp in YYYYMMDD-HHMMSS format
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+
+    # Create filename
+    filename = f'reassessment-{session}-{semester}-{timestamp}.csv'
+
+    # Upload to Dropbox
+    path = f'/Reassessments/{filename}'
+    dbx.files_upload(csv_bytes, path, mode=dropbox.files.WriteMode.add)
+
+
 def main():
 
     session = '2023/2024'
