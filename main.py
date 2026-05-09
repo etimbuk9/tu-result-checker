@@ -1,8 +1,8 @@
+import ast
 import os
 import json
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import dropbox_connect
@@ -44,21 +44,12 @@ SEMESTERS = ['First Semester', 'Supplementary1',
              'Second Semester', 'Supplementary2']
 
 
-def get_session_semester_combos():
-    return [(x, y) for x in SESSIONS for y in SEMESTERS]
-
-
 # Assuming you're using a templates directory
 templates = Jinja2Templates(directory="templates")
-
-origins = [
-    "http://localhost:5500",  # frontend origin
-]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -87,55 +78,12 @@ class AdminConfigRequest(BaseModel):
     key: str
 
 
-def get_grade_point(grade):
-    if grade == 'A':
-        return 5
-    elif grade == 'B':
-        return 4
-    elif grade == 'C':
-        return 3
-    elif grade == 'D':
-        return 2
-    elif grade == 'E':
-        return 1
-    else:
-        return 0
-
-
 def verify_transaction(reference):
     response = requests.get(
         f"https://api.paystack.co/transaction/verify/{reference}",
         headers=dropbox_connect.headers,
     )
     return response.json()
-
-
-def calculate_cgpa(session, semester, student):
-    combos = get_session_semester_combos()
-    idx = combos.index((session, semester))
-
-    results = []
-    for i in range(idx + 1):
-        session, semester = combos[i]
-        url = dropbox_connect.get_result_url(session, semester)
-        if url:
-            result = dropbox_connect.get_student_result(url, student)
-            if result is not None:
-                results.append(result)
-
-    result_df = pd.concat(results, ignore_index=True)
-    result_df['grade'] = result_df['final_grade'].apply(
-        lambda x: 5 if x == 'A' else 4 if x == 'B' else 3 if x == 'C' else 2 if x == 'D' else 1 if x == 'E' else 0)
-    result_df['course_units'] = [0 if result_df['out_of_faculty'].iloc[x]
-                                 else result_df['course_units'].iloc[x] for x in range(result_df.shape[0])]
-    result_df['grade_point'] = result_df['grade'] * result_df['course_units']
-    total_credit_units = result_df['course_units'].sum()
-    total_grade_points = result_df['grade_point'].sum()
-    cgpa = total_grade_points / total_credit_units
-
-    print(f"CGPA: {cgpa}")
-
-    return cgpa
 
 
 @app.get("/")
@@ -193,7 +141,7 @@ async def get_reassessment_results(student: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Student not found")
     result.fillna('', inplace=True)
-    student_name = eval(result['student_details'].iloc[0])['student_name']
+    student_name = ast.literal_eval(result['student_details'].iloc[0])['student_name']
     courses = []
     for _, row in result.iterrows():
         courses.append({
@@ -300,7 +248,13 @@ async def reassessment_confirm(request: Request, uuid: str, reference: str):
             "timestamp": dt.now().isoformat(),
         })
     df = pd.DataFrame(rows)
-    dropbox_connect.save_reassessment(df, entry["session"], entry["semester"])
+    try:
+        dropbox_connect.save_reassessment(df, entry["session"], entry["semester"])
+    except Exception:
+        return templates.TemplateResponse("reassessment-confirm.html", {
+            "request": request,
+            "error": f"Your payment was received but we could not save your request. Please contact the registry with your payment reference: {reference}",
+        })
     result_cache.pop(f"reassessment:{uuid}", None)
     return templates.TemplateResponse("reassessment-confirm.html", {
         "request": request,

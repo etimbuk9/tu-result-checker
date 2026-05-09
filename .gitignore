@@ -172,3 +172,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# App runtime config (contains session/semester state, not for VCS)
+config.json
