@@ -1,4 +1,6 @@
-from fastapi import FastAPI, HTTPException, Request, Response
+import os
+import json
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -7,22 +9,32 @@ import dropbox_connect
 import requests
 from datetime import datetime as dt
 import pandas as pd
-import urllib.request
-import ssl
-from xhtml2pdf import pisa
-from io import BytesIO
+from pydantic import BaseModel
 
 from cachetools import TTLCache
 from uuid import uuid4
-import json
 from dotenv import load_dotenv
-from fastapi.responses import StreamingResponse
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Holds 1000 entries max, each expires after 15 minutes (900 seconds)
 result_cache = TTLCache(maxsize=1000, ttl=900)
+
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+ADMIN_KEY = os.getenv('ADMIN_KEY', '')
+
+
+def load_config() -> dict:
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH) as f:
+            return json.load(f)
+    return {}
+
+
+def save_config(session: str, semester: str) -> None:
+    with open(CONFIG_PATH, 'w') as f:
+        json.dump({'session': session, 'semester': semester}, f)
 
 
 app = FastAPI()
@@ -33,12 +45,10 @@ SEMESTERS = ['First Semester', 'Supplementary1',
 
 
 def get_session_semester_combos():
-
     return [(x, y) for x in SESSIONS for y in SEMESTERS]
 
 
 # Assuming you're using a templates directory
-# app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 origins = [
@@ -47,21 +57,34 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["*"] to allow all
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-class ResultBreakdown:
-    def __init__(self, result: dict):
-        self.attendance = result.get('attendance', 0)
-        self.assignment = result.get('assignment', 0)
-        self.mid_sem_test = result.get('mid_sem_test', 0)
-        self.class_presentation = result.get('class_presentation', 0)
-        self.senate_recommends = result.get('senate_recommends', 0)
-        self.exam_score = result.get('exam_score', 0)
+class CourseSelection(BaseModel):
+    course_name: str
+    course_title: str
+    course_units: int
+
+
+class SelectionRequest(BaseModel):
+    student: str
+    student_name: str
+    courses: list[CourseSelection]
+
+
+class ComplaintsRequest(BaseModel):
+    uuid: str
+    complaints: dict[str, str]
+
+
+class AdminConfigRequest(BaseModel):
+    session: str
+    semester: str
+    key: str
 
 
 def get_grade_point(grade):
@@ -87,40 +110,12 @@ def verify_transaction(reference):
     return response.json()
 
 
-@app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-
-@app.get("/confirm-discount-code/")
-async def confirm_discount_code(request: Request, discount_code: str):
-    codes_name = "discounts.csv"
-    codes_url = dropbox_connect.get_code_url(codes_name)
-
-    if codes_url is None:
-        return {'status': False, 'message': 'Discount code file not found.'}
-
-    context = ssl._create_unverified_context()
-
-    # Open the URL manually and read into pandas
-    with urllib.request.urlopen(codes_url, context=context) as response:
-        df = pd.read_csv(response)
-
-    if discount_code.strip() in df['discountCode'].values:
-
-        return {'status': True, 'message': 'Discount code is valid.'}
-
-    return {'status': False, 'message': 'Discount code is invalid.'}
-
-
 def calculate_cgpa(session, semester, student):
-
     combos = get_session_semester_combos()
-    # print(combos)
     idx = combos.index((session, semester))
 
     results = []
-    for i in range(idx+1):
+    for i in range(idx + 1):
         session, semester = combos[i]
         url = dropbox_connect.get_result_url(session, semester)
         if url:
@@ -143,343 +138,178 @@ def calculate_cgpa(session, semester, student):
     return cgpa
 
 
-@app.get("/get-access-code/")
-async def get_access_code(email: str, callbackUrl: str):
-    if not email:
-        raise HTTPException(status_code=400, detail="Email is required")
-
-    query = str(callbackUrl).split('?')[-1]
-    query = query.replace('%2F', '-')
-    query = query.replace('%20', ' ')
-    query = str(query).split('&')
-    query = {k: v for k, v in (x.split('=') for x in query)}
-    print(query)
-
-    url = dropbox_connect.get_result_url(query['session'], query["semester"])
-
-    if url is None:
-        raise HTTPException(
-            status_code=404, detail="Semester's Result not found")
-
-    result = dropbox_connect.get_student_result(url, query['student'])
-
-    if result is None:
-        raise HTTPException(status_code=404, detail="Student result not found")
-
-    data = {
-        "email": email,
-        "amount": "100000",
-        'callback_url': callbackUrl,
-        'split_code': 'SPL_DHW7LKoOeE',
-    }
-
-    response = requests.post(
-        "https://api.paystack.co/transaction/initialize",
-        headers=dropbox_connect.headers,
-        data=data,)
-
-    return response.json()
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/reassessment/")
 
 
-@app.get("/results/")
-async def get_result_html(session: str, semester: str, student: str):
-
-    print(f"Session: {session}, Semester: {semester}, Student: {student}")
-
-    if not session or not semester or not student:
-        raise HTTPException(status_code=400, detail="Missing parameters")
-
-    if '/' in session:
-        session = str(session).replace('/', '-')
-
-    url = dropbox_connect.get_result_url(session, semester)
-
-    if url:
-        result = dropbox_connect.get_student_result(url, student)
-        print(f"Result: {result}")
-        if result is not None:
-            result.fillna('', inplace=True)
-            total_gp = sum([get_grade_point(grade) * units for grade,
-                           units in zip(result['final_grade'], result['course_units'])])
-            data = {'status': '', 'results': [], 'html': ''}
-            for index, row in result.iterrows():
-                # print(type(row['student_details']))
-                result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}", eval(row['student_details'])['student_name'],
-                               row['course_units'], row['total_score'], row['final_grade']]
-                data['status'] = 'success'
-                data['results'].append(result_dict)
-            data['html'] = f"""
-                <table class="table-auto" style="width: 100%;">
-                <thead class="text-left">
-                    <tr>
-                        <th>Course Name</th>
-                        <th>Course Units</th>
-                        <th>Total Score</th>
-                        <th>Final Grade</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {''.join([f"<tr><td>{r[0]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td></tr>" for r in data['results']])}
-                </tbody>
-                </table>
-                
-                <br><hr><br>
-                
-                <table style="width: 100%;">
-                <tbody>
-                <tr>
-                    <td>Total Credit Hours</td>
-                    <td>{sum(result['course_units'].tolist())}</td>
-                </tr>
-                <tr>
-                    <td>Total Grade Points</td>
-                    <td>{total_gp}</td>
-                </tr>
-                <tr>
-                    <td>Grade Point Average</td>
-                    <td>{round(total_gp/sum(result['course_units'].tolist()), 2)}</td>
-                </tr>
-                </tbody>
-                </table>
-                
-                <br><hr><br>
-                
-                """
-            return data
-        else:
-            return {"detail": "Student result not found."}
-
-    return {"detail": "Student result not found."}
-
-
-# @app.get("/results2/", response_class=HTMLResponse)
-# async def get_result_html2(request: Request, session: str, semester: str, student: str, reference: str):
-
-#     print(f"Session: {session}, Semester: {semester}, Student: {student}")
-
-#     if not session or not semester or not student:
-#         raise HTTPException(status_code=400, detail="Missing parameters")
-
-#     if '/' in session:
-#         session = str(session).replace('/', '-')
-
-#     url = dropbox_connect.get_result_url(session, semester)
-
-#     if reference != 'discountCode':
-#         valid_transaction = verify_transaction(reference)
-#     else:
-#         valid_transaction = {'status': True}
-
-#     if valid_transaction['status']:
-
-#         if url:
-#             result = dropbox_connect.get_student_result(url, student)
-#             student_name = ""
-#             # print(f"Result: {result}")
-#             if result is not None:
-#                 result.fillna('', inplace=True)
-#                 student_name = eval(result['student_details'].iloc[0])[
-#                     'student_name']
-
-#                 # print(type(result['out_of_faculty'].iloc[0]))
-#                 total_gp = sum([get_grade_point(grade) * units for grade,
-#                                 units, oof in zip(result['final_grade'], result['course_units'], result['out_of_faculty']) if not oof])
-#                 data = {'status': '', 'results': [], 'html': ''}
-#                 for index, row in result.iterrows():
-#                     # print(type(row['student_details']))
-#                     result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
-#                                    row['course_units'] if not row['out_of_faculty'] else 0, row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
-#                     data['status'] = 'success'
-#                     data['results'].append(result_dict)
-
-#                 cgpa = calculate_cgpa(session, semester, student)
-#                 tch = sum([unit for unit, oof in zip(
-#                     result['course_units'], result['out_of_faculty']) if not oof])
-
-#                 return templates.TemplateResponse("results2.html", {
-#                     "request": request,
-#                     "session": session,
-#                     "semester": semester,
-#                     "student": student,
-#                     "student_name": student_name,
-#                     "results": data['results'],
-#                     "total_credit_hours": tch,
-#                     "total_grade_points": total_gp,
-#                     "gpa": round(total_gp/tch, 2) if tch > 0 else 0,
-#                     "cgpa": round(cgpa, 2),
-#                 })
-
-#     return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
-
-
-@app.get("/results2/", response_class=HTMLResponse)
-async def get_result_html2(request: Request, session: str, semester: str, student: str, reference: str):
-    if not session or not semester or not student:
-        raise HTTPException(status_code=400, detail="Missing parameters")
-
-    session = session.replace('/', '-')
-    url = dropbox_connect.get_result_url(session, semester)
-
-    valid_transaction = verify_transaction(
-        reference) if reference != 'discountCode' else {'status': True}
-
-    if not (valid_transaction['status'] and url):
-        return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Student result not found.'})
-
-    result = dropbox_connect.get_student_result(url, student)
-    if result is None:
-        return templates.TemplateResponse("results2.html", {'request': request, 'error': 'Result data not found.'})
-
-    result.fillna('', inplace=True)
-    student_name = eval(result['student_details'].iloc[0])['student_name']
-
-    results = []
-    total_gp = 0
-    total_ch = 0
-
-    for _, row in result.iterrows():
-        breakdown = ResultBreakdown(eval(row['breakdown']))
-        course_units = row['course_units']
-        is_oof = row['out_of_faculty']
-        units = course_units if not is_oof else 0
-        grade_point = get_grade_point(row['final_grade']) * units
-        total_gp += grade_point
-        total_ch += units
-        results.append([
-            f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
-            units,
-            row['total_score'],
-            row['final_grade'],
-            breakdown
-        ])
-
-    cgpa = calculate_cgpa(session, semester, student)
-    gpa = round(total_gp / total_ch, 2) if total_ch > 0 else 0
-
-    # Generate ID and cache result
-    result_id = str(uuid4())
-    result_cache[result_id] = {
-        "session": session,
-        "semester": semester,
-        "student": student,
-        "student_name": student_name,
-        "results": results,
-        "total_credit_hours": total_ch,
-        "total_grade_points": total_gp,
-        "gpa": gpa,
-        "cgpa": round(cgpa, 2),
-    }
-
-    return RedirectResponse(url=f"/results2/view/{result_id}", status_code=302)
-
-
-@app.get("/results2/view/{result_id}", response_class=HTMLResponse)
-async def view_result(request: Request, result_id: str):
-    if result_id not in result_cache:
-        return templates.TemplateResponse("results2.html", {
-            "request": request,
-            "error": "Result expired or not found."
-        })
-
-    data = result_cache[result_id]
-
-    return templates.TemplateResponse("results2.html", {
+@app.get("/admin/", response_class=HTMLResponse)
+async def admin_panel(request: Request, key: str = ""):
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    config = load_config()
+    return templates.TemplateResponse("admin.html", {
         "request": request,
-        "session": data['session'],
-        "semester": data['semester'],
-        "student": data['student'],
-        "student_name": data['student_name'],
-        "results": data['results'],
-        "total_credit_hours": data['total_credit_hours'],
-        "total_grade_points": data['total_grade_points'],
-        "gpa": data['gpa'],
-        "cgpa": data['cgpa'],
+        "sessions": SESSIONS,
+        "semesters": SEMESTERS,
+        "current_session": config.get("session", ""),
+        "current_semester": config.get("semester", ""),
+        "admin_key": key,
     })
 
 
-def render_template(template_name: str, context: dict) -> str:
-    """Render a Jinja2 template with context."""
-    template = templates.get_template(template_name)
-    return template.render(context)
+@app.post("/admin/set-config/")
+async def set_config(body: AdminConfigRequest):
+    if not ADMIN_KEY or body.key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if body.session not in SESSIONS:
+        raise HTTPException(status_code=400, detail="Invalid session")
+    if body.semester not in SEMESTERS:
+        raise HTTPException(status_code=400, detail="Invalid semester")
+    save_config(body.session, body.semester)
+    return {"status": True, "session": body.session, "semester": body.semester}
 
 
-def convert_html_to_pdf(source_html: str) -> bytes:
-    """Convert HTML content to PDF and return as bytes."""
-    result = BytesIO()
-    pdf = pisa.CreatePDF(src=source_html, dest=result)
-    if not pdf.err:
-        return result.getvalue()
-    else:
-        # Return empty bytes if PDF generation fails
-        return b""
+@app.get("/reassessment/", response_class=HTMLResponse)
+async def reassessment_home(request: Request):
+    config = load_config()
+    return templates.TemplateResponse("reassessment.html", {
+        "request": request,
+        "session": config.get("session", ""),
+        "semester": config.get("semester", ""),
+        "active": bool(config.get("session") and config.get("semester")),
+    })
 
 
-@app.get("/download-result/")
-async def download_result(request: Request, session: str, semester: str, student: str):
-    if not session or not semester or not student:
-        raise HTTPException(status_code=400, detail="Missing parameters")
+@app.get("/reassessment/get-results/")
+async def get_reassessment_results(student: str):
+    config = load_config()
+    if not config.get("session") or not config.get("semester"):
+        raise HTTPException(status_code=503, detail="Reassessment not currently open")
+    url = dropbox_connect.get_result_url(config["session"], config["semester"])
+    if url is None:
+        raise HTTPException(status_code=404, detail="No result sheet found for this period")
+    result = dropbox_connect.get_student_result(url, student)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Student not found")
+    result.fillna('', inplace=True)
+    student_name = eval(result['student_details'].iloc[0])['student_name']
+    courses = []
+    for _, row in result.iterrows():
+        courses.append({
+            "course_name": row["course_name"],
+            "course_ccmas": row["course_ccmas"],
+            "course_title": row["course_title"],
+            "course_units": int(row["course_units"]),
+            "total_score": float(row["total_score"]) if row["total_score"] != '' else 0,
+            "final_grade": row["final_grade"],
+        })
+    return {"student_name": student_name, "courses": courses}
 
-    if '/' in session:
-        session = str(session).replace('/', '-')
 
-    url = dropbox_connect.get_result_url(session, semester)
+@app.post("/reassessment/select/")
+async def select_courses(body: SelectionRequest):
+    if not body.courses:
+        raise HTTPException(status_code=400, detail="Select at least one course")
+    config = load_config()
+    if not config.get("session") or not config.get("semester"):
+        raise HTTPException(status_code=503, detail="Reassessment not currently open")
+    uid = str(uuid4())
+    result_cache[f"reassessment:{uid}"] = {
+        "student_no": body.student,
+        "student_name": body.student_name,
+        "session": config["session"],
+        "semester": config["semester"],
+        "courses": [c.model_dump() for c in body.courses],
+        "complaints": {},
+    }
+    return {"uuid": uid}
 
-    if url:
-        result = dropbox_connect.get_student_result(url, student)
-        student_name = ""
-        # print(f"Result: {result}")
-        if result is not None:
-            result.fillna('', inplace=True)
-            student_name = eval(result['student_details'].iloc[0])[
-                'student_name']
-            total_gp = sum([get_grade_point(grade) * units for grade,
-                            units, oof in zip(result['final_grade'], result['course_units'], result['out_of_faculty']) if not oof])
-            data = {'status': '', 'results': [], 'html': ''}
-            for index, row in result.iterrows():
-                # print(type(row['student_details']))
-                result_dict = [f"{row['course_name']}-{row['course_ccmas']}-{row['course_title']}",
-                               row['course_units'] if not row['out_of_faculty'] else 0, row['total_score'], row['final_grade'], ResultBreakdown(eval(row['breakdown']))]
-                data['status'] = 'success'
-                data['results'].append(result_dict)
 
-            cgpa = calculate_cgpa(session, semester, student)
+@app.get("/reassessment/complaint/{uuid}", response_class=HTMLResponse)
+async def complaint_form(request: Request, uuid: str):
+    entry = result_cache.get(f"reassessment:{uuid}")
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Session expired or not found")
+    n = len(entry["courses"])
+    return templates.TemplateResponse("reassessment-complaint.html", {
+        "request": request,
+        "uuid": uuid,
+        "student_no": entry["student_no"],
+        "student_name": entry["student_name"],
+        "session": entry["session"],
+        "semester": entry["semester"],
+        "courses": entry["courses"],
+        "amount_naira": 6000 * n,
+        "amount_kobo": 600000 * n,
+    })
 
-            tch = sum([unit for unit, oof in zip(
-                result['course_units'], result['out_of_faculty']) if not oof])
 
-            context = {
-                "session": session,
-                "semester": semester,
-                "student": student,
-                "student_name": student_name,
-                "results": data['results'],
-                "total_credit_hours": tch,
-                "total_grade_points": total_gp,
-                "gpa": round(total_gp/tch, 2) if tch > 0 else 0,
-                "cgpa": round(cgpa, 2),
-            }
+@app.post("/reassessment/init-payment/")
+async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
+    entry = result_cache.get(f"reassessment:{body.uuid}")
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Session expired")
+    entry["complaints"] = body.complaints
+    result_cache[f"reassessment:{body.uuid}"] = entry
+    amount_kobo = 600000 * len(entry["courses"])
+    email = f"{entry['student_no']}@topfaith.edu.ng"
+    callback_url = str(request.base_url) + f"reassessment/confirm/?uuid={body.uuid}"
+    payload = {
+        "email": email,
+        "amount": str(amount_kobo),
+        "callback_url": callback_url,
+        "split_code": "SPL_DHW7LKoOeE",
+    }
+    response = requests.post(
+        "https://api.paystack.co/transaction/initialize",
+        headers=dropbox_connect.headers,
+        data=payload,
+    )
+    data = response.json()
+    if not data.get("status"):
+        raise HTTPException(status_code=502, detail="Payment initialisation failed")
+    return {"access_code": data["data"]["access_code"]}
 
-            temp = render_template('report2.html', context)
-            # Convert HTML to PDF using pisa
-            pdf_bytes = convert_html_to_pdf(temp)
 
-            if pdf_bytes:
-                return Response(content=pdf_bytes, media_type="application/pdf", headers={
-                    "Content-Disposition": f"attachment; filename=result_{session}_{semester}_{student}.pdf"
-                })
-            else:
-                raise HTTPException(
-                    status_code=500, detail="Failed to generate PDF")
-
-    # return templates.TemplateResponse("results2.html", {
-    #     "request": request,
-    #     "session": session,
-    #     "semester": semester,
-    #     "student": student,
-    #     "student_name": student_name,
-    #     "results": data['results'],
-    #     "total_credit_hours": sum(result['course_units'].tolist()),
-    #     "total_grade_points": total_gp,
-    #     "gpa": round(total_gp/sum(result['course_units'].tolist()), 2),
-    #     "cgpa": round(cgpa, 2),
-    # })
+@app.get("/reassessment/confirm/", response_class=HTMLResponse)
+async def reassessment_confirm(request: Request, uuid: str, reference: str):
+    entry = result_cache.get(f"reassessment:{uuid}")
+    if entry is None:
+        return templates.TemplateResponse("reassessment-confirm.html", {
+            "request": request,
+            "error": "Session expired. Please start over.",
+        })
+    verification = verify_transaction(reference)
+    if not verification.get("status") or verification.get("data", {}).get("status") != "success":
+        return templates.TemplateResponse("reassessment-confirm.html", {
+            "request": request,
+            "error": "Payment could not be verified.",
+        })
+    rows = []
+    for course in entry["courses"]:
+        rows.append({
+            "student_no": entry["student_no"],
+            "student_name": entry["student_name"],
+            "session": entry["session"],
+            "semester": entry["semester"],
+            "course_name": course["course_name"],
+            "course_title": course["course_title"],
+            "complaint": entry["complaints"].get(course["course_name"], ""),
+            "payment_reference": reference,
+            "timestamp": dt.now().isoformat(),
+        })
+    df = pd.DataFrame(rows)
+    dropbox_connect.save_reassessment(df, entry["session"], entry["semester"])
+    result_cache.pop(f"reassessment:{uuid}", None)
+    return templates.TemplateResponse("reassessment-confirm.html", {
+        "request": request,
+        "student_name": entry["student_name"],
+        "student_no": entry["student_no"],
+        "session": entry["session"],
+        "semester": entry["semester"],
+        "courses": entry["courses"],
+        "reference": reference,
+        "num_courses": len(entry["courses"]),
+        "amount_paid": 6000 * len(entry["courses"]),
+    })
