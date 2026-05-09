@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Topfaith University | Result Reassessment Request</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 flex items-center justify-center min-h-screen py-10">
+    <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-4xl">
+      <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">
+        Topfaith University &mdash; Result Reassessment Request
+      </h2>
+
+      {% if not active %}
+      <div class="bg-blue-50 border border-blue-300 text-blue-800 rounded-lg px-6 py-4 text-center">
+        Reassessment is not currently open. Please check back later or contact the registry.
+      </div>
+      {% else %}
+
+      <div class="mb-5 flex justify-center">
+        <span class="inline-block bg-blue-100 text-blue-700 text-sm font-medium px-4 py-1 rounded-full border border-blue-300">
+          Session: {{ session }} | {{ semester }}
+        </span>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label for="studentNumber" class="block text-sm font-medium text-gray-700 mb-1">Student Number</label>
+          <input
+            id="studentNumber"
+            type="text"
+            placeholder="e.g. 202100001"
+            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+
+        <button
+          id="loadBtn"
+          class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+        >
+          Load My Results
+        </button>
+
+        <div id="errorMsg" class="hidden bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 text-sm"></div>
+
+        <div id="spinner" class="hidden flex justify-center">
+          <div class="animate-spin rounded-full h-10 w-10 border-t-4 border-blue-500 border-solid"></div>
+        </div>
+      </div>
+
+      <div id="resultsSection" style="display: none;" class="mt-6">
+        <p class="text-sm text-gray-600 mb-1">Results for:</p>
+        <p id="studentNameDisplay" class="text-lg font-semibold text-gray-800 mb-4"></p>
+
+        <p class="text-sm text-gray-500 mb-2">Select the courses you wish to contest:</p>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <thead>
+              <tr class="bg-blue-600 text-white">
+                <th class="px-3 py-2 text-left rounded-tl-lg">Course Code</th>
+                <th class="px-3 py-2 text-left">Course Title</th>
+                <th class="px-3 py-2 text-center">Units</th>
+                <th class="px-3 py-2 text-center">Score</th>
+                <th class="px-3 py-2 text-center">Grade</th>
+                <th class="px-3 py-2 text-center rounded-tr-lg">Contest?</th>
+              </tr>
+            </thead>
+            <tbody id="resultsTable" class="divide-y divide-gray-200">
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button
+            id="nextBtn"
+            disabled
+            class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Next &rarr;
+          </button>
+        </div>
+      </div>
+
+      {% endif %}
+    </div>
+
+    {% if active %}
+    <script>
+      const loadBtn = document.getElementById('loadBtn');
+      const spinner = document.getElementById('spinner');
+      const errorMsg = document.getElementById('errorMsg');
+      const resultsSection = document.getElementById('resultsSection');
+      const resultsTable = document.getElementById('resultsTable');
+      const studentNameDisplay = document.getElementById('studentNameDisplay');
+      const nextBtn = document.getElementById('nextBtn');
+      const studentNumberInput = document.getElementById('studentNumber');
+
+      function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.classList.remove('hidden');
+      }
+
+      function hideError() {
+        errorMsg.classList.add('hidden');
+        errorMsg.textContent = '';
+      }
+
+      function showSpinner() {
+        spinner.classList.remove('hidden');
+      }
+
+      function hideSpinner() {
+        spinner.classList.add('hidden');
+      }
+
+      function updateNextBtn() {
+        const checked = resultsTable.querySelectorAll('input[type="checkbox"]:checked');
+        nextBtn.disabled = checked.length === 0;
+      }
+
+      loadBtn.addEventListener('click', function () {
+        const studentNumber = studentNumberInput.value.trim();
+        if (!studentNumber) {
+          showError('Please enter your student number.');
+          return;
+        }
+
+        hideError();
+        resultsSection.style.display = 'none';
+        showSpinner();
+
+        fetch('/reassessment/get-results/?student=' + encodeURIComponent(studentNumber))
+          .then(function (response) {
+            if (response.status === 404) {
+              throw new Error('Student not found');
+            } else if (response.status === 503) {
+              throw new Error('Reassessment not currently open');
+            } else if (!response.ok) {
+              throw new Error('Error loading results');
+            }
+            return response.json();
+          })
+          .then(function (data) {
+            hideSpinner();
+            studentNameDisplay.textContent = data.student_name;
+            resultsTable.innerHTML = '';
+
+            data.courses.forEach(function (course) {
+              const tr = document.createElement('tr');
+              tr.className = 'hover:bg-gray-50';
+              tr.dataset.courseName = course.course_name;
+              tr.dataset.courseTitle = course.course_title;
+              tr.dataset.courseUnits = course.course_units;
+              tr.innerHTML =
+                '<td class="px-3 py-2 font-mono">' + escapeHtml(course.course_name) + '</td>' +
+                '<td class="px-3 py-2">' + escapeHtml(course.course_title) + '</td>' +
+                '<td class="px-3 py-2 text-center">' + escapeHtml(String(course.course_units)) + '</td>' +
+                '<td class="px-3 py-2 text-center">' + escapeHtml(String(course.total_score)) + '</td>' +
+                '<td class="px-3 py-2 text-center font-semibold">' + escapeHtml(course.final_grade) + '</td>' +
+                '<td class="px-3 py-2 text-center"><input type="checkbox" class="contest-checkbox h-4 w-4 accent-blue-600 cursor-pointer" /></td>';
+              resultsTable.appendChild(tr);
+            });
+
+            resultsTable.querySelectorAll('.contest-checkbox').forEach(function (cb) {
+              cb.addEventListener('change', updateNextBtn);
+            });
+
+            updateNextBtn();
+            resultsSection.style.display = '';
+          })
+          .catch(function (err) {
+            hideSpinner();
+            showError(err.message || 'Error loading results');
+          });
+      });
+
+      nextBtn.addEventListener('click', function () {
+        const studentNumber = studentNumberInput.value.trim();
+        const studentName = studentNameDisplay.textContent;
+        const checked = resultsTable.querySelectorAll('input[type="checkbox"]:checked');
+        const courses = [];
+
+        checked.forEach(function (cb) {
+          const row = cb.closest('tr');
+          courses.push({
+            course_name: row.dataset.courseName,
+            course_title: row.dataset.courseTitle,
+            course_units: Number(row.dataset.courseUnits)
+          });
+        });
+
+        hideError();
+
+        fetch('/reassessment/select/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            student: studentNumber,
+            student_name: studentName,
+            courses: courses
+          })
+        })
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error('Error submitting selection');
+            }
+            return response.json();
+          })
+          .then(function (data) {
+            window.location.href = '/reassessment/complaint/' + data.uuid;
+          })
+          .catch(function (err) {
+            showError(err.message || 'Error submitting selection');
+          });
+      });
+
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+      }
+    </script>
+    {% endif %}
+  </body>
+</html>
