@@ -133,15 +133,18 @@ async def reassessment_home(request: Request):
 async def get_reassessment_results(student: str):
     config = load_config()
     if not config.get("session") or not config.get("semester"):
-        raise HTTPException(status_code=503, detail="Reassessment not currently open")
+        raise HTTPException(
+            status_code=503, detail="Reassessment not currently open")
     url = dropbox_connect.get_result_url(config["session"], config["semester"])
     if url is None:
-        raise HTTPException(status_code=404, detail="No result sheet found for this period")
+        raise HTTPException(
+            status_code=404, detail="No result sheet found for this period")
     result = dropbox_connect.get_student_result(url, student)
     if result is None:
         raise HTTPException(status_code=404, detail="Student not found")
     result.fillna('', inplace=True)
-    student_name = ast.literal_eval(result['student_details'].iloc[0])['student_name']
+    student_name = ast.literal_eval(result['student_details'].iloc[0])[
+        'student_name']
     courses = []
     for _, row in result.iterrows():
         courses.append({
@@ -158,10 +161,12 @@ async def get_reassessment_results(student: str):
 @app.post("/reassessment/select/")
 async def select_courses(body: SelectionRequest):
     if not body.courses:
-        raise HTTPException(status_code=400, detail="Select at least one course")
+        raise HTTPException(
+            status_code=400, detail="Select at least one course")
     config = load_config()
     if not config.get("session") or not config.get("semester"):
-        raise HTTPException(status_code=503, detail="Reassessment not currently open")
+        raise HTTPException(
+            status_code=503, detail="Reassessment not currently open")
     uid = str(uuid4())
     result_cache[f"reassessment:{uid}"] = {
         "student_no": body.student,
@@ -178,7 +183,8 @@ async def select_courses(body: SelectionRequest):
 async def complaint_form(request: Request, uuid: str):
     entry = result_cache.get(f"reassessment:{uuid}")
     if entry is None:
-        raise HTTPException(status_code=404, detail="Session expired or not found")
+        raise HTTPException(
+            status_code=404, detail="Session expired or not found")
     n = len(entry["courses"])
     return templates.TemplateResponse(request, "reassessment-complaint.html", {
         "uuid": uuid,
@@ -201,21 +207,49 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
     result_cache[f"reassessment:{body.uuid}"] = entry
     amount_kobo = 600000 * len(entry["courses"])
     email = f"{entry['student_no']}@topfaith.edu.ng"
-    callback_url = str(request.base_url) + f"reassessment/confirm/?uuid={body.uuid}"
+    callback_url = str(request.base_url) + \
+        f"reassessment/confirm/?uuid={body.uuid}"
+    custom_info = [
+        {
+            "display_name": "Student Number 202XXXXXX",
+            "variable_name": "student_number_202xxxxxx",
+            "value": entry['student_no']
+        },
+        {
+            "display_name": "Reassessment",
+            "variable_name": "reassessment",
+            "value": "Reassessment Request"
+        },
+    ]
     payload = {
         "email": email,
         "amount": str(amount_kobo),
         "callback_url": callback_url,
-        "split_code": "SPL_DHW7LKoOeE",
+        # "split": {
+        #     "type": "flat",
+        #     "bearer_type": "account",
+        #     "subaccounts": [
+        #         {
+        #             "subaccount": "ACCT_hm8ktsr7sd7xtxr",
+        #             # 16.67% to school minus 300 naira fee
+        #             "share": int(amount_kobo/6) - 30000,
+        #         },
+        #     ]
+        # },
+        "metadata": {
+            "custom_fields": custom_info
+        },
     }
     response = requests.post(
         "https://api.paystack.co/transaction/initialize",
         headers=dropbox_connect.headers,
-        data=payload,
+        json=payload,
     )
     data = response.json()
+
     if not data.get("status"):
-        raise HTTPException(status_code=502, detail="Payment initialisation failed")
+        raise HTTPException(
+            status_code=502, detail="Payment initialisation failed")
     return {"access_code": data["data"]["access_code"]}
 
 
@@ -246,7 +280,8 @@ async def reassessment_confirm(request: Request, uuid: str, reference: str):
         })
     df = pd.DataFrame(rows)
     try:
-        dropbox_connect.save_reassessment(df, entry["session"], entry["semester"])
+        dropbox_connect.save_reassessment(
+            df, entry["session"], entry["semester"])
     except Exception:
         return templates.TemplateResponse(request, "reassessment-confirm.html", {
             "error": f"Your payment was received but we could not save your request. Please contact the registry with your payment reference: {reference}",
