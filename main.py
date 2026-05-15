@@ -110,7 +110,7 @@ async def admin_panel(request: Request, key: str = ""):
         "semesters": SEMESTERS,
         "current_session": config.get("session", ""),
         "current_semester": config.get("semester", ""),
-        "current_amount": config.get("amount_per_course", 6000),
+        "current_amount": config.get("amount_per_course", 5000),
         "admin_key": key,
     })
 
@@ -158,12 +158,16 @@ async def get_reassessment_results(student: str):
         'student_name']
     courses = []
     for _, row in result.iterrows():
+        exam_score = row.get('exam_score') or 0
+        ca_score = row.get('ca_score') or 0
         courses.append({
             "course_name": row["course_name"],
             "course_ccmas": row["course_ccmas"],
             "course_title": row["course_title"],
             "course_units": int(row["course_units"]),
             "total_score": float(row["total_score"]) if row["total_score"] != '' else 0,
+            "ca_score": ca_score,
+            "exam_score": exam_score,
             "final_grade": row["final_grade"],
         })
     return {"student_name": student_name, "courses": courses}
@@ -198,7 +202,7 @@ async def complaint_form(request: Request, uuid: str):
             status_code=404, detail="Session expired or not found")
     n = len(entry["courses"])
     amount_per_course = entry.get(
-        "amount_per_course") or load_config().get("amount_per_course", 6000)
+        "amount_per_course") or load_config().get("amount_per_course", 5000)
     entry["amount_per_course"] = amount_per_course
     result_cache[f"reassessment:{uuid}"] = entry
     return templates.TemplateResponse(request, "reassessment-complaint.html", {
@@ -213,6 +217,18 @@ async def complaint_form(request: Request, uuid: str):
     })
 
 
+def get_charge_amount(amount_per_course, num_courses):
+    charge = amount_per_course * 100 * num_courses * 0.015 + (500*100)
+
+    if charge < 80000:
+        charge = 80000
+    elif charge > 250000:
+        charge = 250000
+    else:
+        charge = int(charge)
+    return charge
+
+
 @app.post("/reassessment/init-payment/")
 async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
     entry = result_cache.get(f"reassessment:{body.uuid}")
@@ -220,8 +236,9 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
         raise HTTPException(status_code=404, detail="Session expired")
     entry["complaints"] = body.complaints
     result_cache[f"reassessment:{body.uuid}"] = entry
-    amount_kobo = entry.get("amount_per_course", 6000) * \
-        100 * len(entry["courses"])
+    amount_kobo = entry.get("amount_per_course", 5000) * \
+        100 * len(entry["courses"]) + get_charge_amount(
+            entry.get("amount_per_course", 5000), len(entry["courses"]))
     email = f"{entry['student_no']}@topfaith.edu.ng"
     base_url = os.getenv('BASE_URL', str(request.base_url)).rstrip('/')
     callback_url = f"{base_url}/reassessment/confirm/?uuid={body.uuid}"
@@ -253,7 +270,7 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
                     {
                         "subaccount": "ACCT_hm8ktsr7sd7xtxr",
                         # 16.67% to school minus 300 naira fee
-                        "share": int(amount_kobo/6) - 30000,
+                        "share": get_charge_amount(entry.get("amount_per_course", 5000), len(entry["courses"])) - 30000,
                     },
             ]
         }
@@ -307,7 +324,8 @@ async def reassessment_confirm(request: Request, uuid: str, reference: str,
             "error": f"Your payment was received but we could not save your request. Please contact the registry with your payment reference: {reference}",
         })
     result_cache.pop(f"reassessment:{uuid}", None)
-    background_tasks.add_task(mail_service.send_reassessment_emails, entry, reference)
+    background_tasks.add_task(
+        mail_service.send_reassessment_emails, entry, reference)
     return templates.TemplateResponse(request, "reassessment-confirm.html", {
         "student_name": entry["student_name"],
         "student_no": entry["student_no"],
@@ -316,5 +334,5 @@ async def reassessment_confirm(request: Request, uuid: str, reference: str,
         "courses": entry["courses"],
         "reference": reference,
         "num_courses": len(entry["courses"]),
-        "amount_paid": 6000 * len(entry["courses"]),
+        "amount_paid": entry.get("amount_per_course", 5000) * len(entry["courses"]),
     })

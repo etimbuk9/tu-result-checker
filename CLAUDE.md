@@ -37,17 +37,21 @@ Single-file FastAPI app (`main.py`) with no database. Student result CSVs live i
 5. Paystack popup completes, redirects to `GET /reassessment/confirm/?uuid=<uuid>&reference=<tx_ref>`
 6. `/reassessment/confirm/` verifies Paystack transaction, uploads a reassessment CSV to Dropbox, fires background email (student + staff), clears cache entry, renders confirmation page
 
-**Paystack payment split:** When `DEBUG != 'True'`, the payment payload includes a split that sends 16.67% of the amount minus ₦300 (3000 kobo) to subaccount `ACCT_hm8ktsr7sd7xtxr`. In debug mode no split is applied. The `headers` dict in `dropbox_connect.py` selects the live or test Paystack key based on `DEBUG`.
+**Paystack payment split:** When `DEBUG != 'True'`, the payment payload includes a split that sends 16.67% of the amount minus ₦300 (3000 kobo) to subaccount `ACCT_hm8ktsr7sd7xtxr`. In debug mode no split is applied. `dropbox_connect.headers` is the Paystack `Authorization` header dict (despite the module name) — it selects the live or test key based on `DEBUG` and is imported directly by `main.py` for both `transaction/initialize` and `transaction/verify` calls.
 
 **Dropbox CSV structure:** Files are named `final-result-{session}-{semester}.csv`. Each row is one course for one student. `student_name` column holds the student *number* (integer). Key columns: `course_name`, `course_ccmas`, `course_title`, `course_units`, `total_score`, `final_grade`, `out_of_faculty`, `student_details` (JSON string containing `student_name`), `breakdown` (JSON with score components).
 
 **Reassessment uploads:** `dropbox_connect.save_reassessment()` uploads a CSV to `/Reassessments/reassessment-{session}-{semester}-{timestamp}.csv` using `WriteMode.add`.
 
-**Session list** is generated dynamically from `START_YEAR = 2021` to the current year. No code change needed to add new sessions.
+**Session list** is generated dynamically from `START_YEAR = 2021` to the current year. No code change needed to add new sessions. The `SEMESTERS` constant is `['First Semester', 'Supplementary1', 'Second Semester', 'Supplementary2']` — these exact strings must match Dropbox CSV filenames and are validated in `POST /admin/set-config/`.
 
-**Email notifications** (`mail_service.py`): after a confirmed reassessment, a background task sends an HTML confirmation email to the student and a notification with complaint details to addresses in `STAFF_EMAILS`. Both use `SMTP_USER`/`SMTP_PASS` via STARTTLS. Failures are logged but do not affect the response.
+**Email notifications** (`mail_service.py`): after a confirmed reassessment, a background task sends an HTML confirmation email to the student and a notification with complaint details to addresses in `STAFF_EMAILS`. Both use `SMTP_USER`/`SMTP_PASS` via STARTTLS. Failures are logged but do not affect the response. The student confirmation email is currently sent to `dict@topfaith.edu.ng` (hardcoded override of `{student_no}@topfaith.edu.ng`) — change line 98 in `mail_service.py` to restore per-student delivery. `STAFF_EMAILS` lists the active recipient addresses; others are commented out.
 
 **`utils.py`:** Windows-only helper that adds all PATH entries as DLL search directories — only relevant when deploying on Windows.
+
+**SSL:** `dropbox_connect.get_student_result()` uses `ssl._create_unverified_context()` to fetch Dropbox shared-link CSVs, bypassing certificate verification. This is intentional to work around SSL issues on the VPS.
+
+**Unused dependencies:** `requirements.txt` includes PDF-generation libraries (`pdfkit`, `pyhanko`, `reportlab`, `xhtml2pdf`) that are not used in the current codebase — likely from a previous or planned feature.
 
 ## Testing
 
