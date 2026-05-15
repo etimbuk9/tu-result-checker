@@ -2,11 +2,12 @@ import ast
 import logging
 import os
 import json
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import dropbox_connect
+import mail_service
 import requests
 from datetime import datetime as dt
 import pandas as pd
@@ -272,7 +273,8 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
 
 
 @app.get("/reassessment/confirm/", response_class=HTMLResponse)
-async def reassessment_confirm(request: Request, uuid: str, reference: str):
+async def reassessment_confirm(request: Request, uuid: str, reference: str,
+                               background_tasks: BackgroundTasks):
     entry = result_cache.get(f"reassessment:{uuid}")
     if entry is None:
         return templates.TemplateResponse(request, "reassessment-confirm.html", {
@@ -305,6 +307,7 @@ async def reassessment_confirm(request: Request, uuid: str, reference: str):
             "error": f"Your payment was received but we could not save your request. Please contact the registry with your payment reference: {reference}",
         })
     result_cache.pop(f"reassessment:{uuid}", None)
+    background_tasks.add_task(mail_service.send_reassessment_emails, entry, reference)
     return templates.TemplateResponse(request, "reassessment-confirm.html", {
         "student_name": entry["student_name"],
         "student_no": entry["student_no"],
