@@ -185,6 +185,8 @@
               tr.dataset.courseTitle = course.course_title;
               tr.dataset.courseUnits = course.course_units;
               tr.dataset.courseScore = course.total_score;
+              tr.dataset.courseCa = course.ca_score;
+              tr.dataset.courseExam = course.exam_score;
               tr.dataset.courseGrade = course.final_grade;
               tr.innerHTML =
                 '<td class="px-3 py-2 font-mono">' +
@@ -242,6 +244,8 @@
             course_title: row.dataset.courseTitle,
             course_units: Number(row.dataset.courseUnits),
             total_score: parseFloat(row.dataset.courseScore || 0),
+            ca_score: parseFloat(row.dataset.courseCa || 0),
+            exam_score: parseFloat(row.dataset.courseExam || 0),
             final_grade: row.dataset.courseGrade || "",
           });
         });

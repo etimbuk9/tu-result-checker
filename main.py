@@ -66,6 +66,8 @@ class CourseSelection(BaseModel):
     course_title: str
     course_units: int
     total_score: float = 0.0
+    ca_score: float = 0.0
+    exam_score: float = 0.0
     final_grade: str = ""
 
 
