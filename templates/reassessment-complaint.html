@@ -17,7 +17,7 @@
       </div>
 
       <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">
-        Topfaith University &mdash; Result Reassessment Request
+        Topfaith University &mdash; Verification & Reassessment Request
       </h2>
 
       <!-- Student info -->
@@ -56,96 +56,142 @@
         </table>
       </div>
 
-      <!-- Instructions -->
-      <p class="text-sm text-gray-600 mb-4">
-        Please provide a brief reason for requesting reassessment for each
-        course below.
-      </p>
-
-      <!-- Courses table -->
-      <div class="overflow-x-auto mb-6">
-        <table class="w-full text-sm border-collapse">
-          <thead>
-            <tr class="bg-blue-600 text-white">
-              <th class="px-3 py-2 text-left rounded-tl-lg">Course Code</th>
-              <th class="px-3 py-2 text-left">Course Title</th>
-              <th class="px-3 py-2 text-center">Units</th>
-              <th class="px-3 py-2 text-center">CA</th>
-              <th class="px-3 py-2 text-center">Exam</th>
-              <th class="px-3 py-2 text-center">Total</th>
-              <th class="px-3 py-2 text-center">Grade</th>
-              <th class="px-3 py-2 text-left rounded-tr-lg">
-                Reason for Complaint
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            {% for course in courses %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-3 py-2 font-mono align-top">
-                {{ course['course_name'] }}
-              </td>
-              <td class="px-3 py-2 align-top">{{ course['course_title'] }}</td>
-              <td class="px-3 py-2 text-center align-top">
-                {{ course['course_units'] }}
-              </td>
-              <td class="px-3 py-2 text-center align-top">
-                {{ course['ca_score'] }}
-              </td>
-              <td class="px-3 py-2 text-center align-top">
-                {{ course['exam_score'] }}
-              </td>
-              <td class="px-3 py-2 text-center align-top">
-                {{ course['total_score'] }}
-              </td>
-              <td class="px-3 py-2 text-center font-semibold align-top">
-                {{ course['final_grade'] }}
-              </td>
-              <td class="px-3 py-2 align-top">
-                <textarea
-                  id="complaint_{{ course['course_name'] }}"
-                  name="complaint_{{ course['course_name'] }}"
-                  data-course="{{ course['course_name'] }}"
-                  rows="2"
-                  required
-                  placeholder="Describe your concern..."
-                  class="w-full min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
-                ></textarea>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <!-- Verification Courses Section -->
+      {% if verification_courses %}
+      <div class="mb-8">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">Courses for Result Verification <span class="text-green-600 font-normal text-sm">(Free)</span></h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Please provide a brief reason for requesting verification for each course below.
+        </p>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm border-collapse">
+            <thead>
+              <tr class="bg-green-600 text-white">
+                <th class="px-3 py-2 text-left rounded-tl-lg">Course Code</th>
+                <th class="px-3 py-2 text-left">Course Title</th>
+                <th class="px-3 py-2 text-center">Units</th>
+                <th class="px-3 py-2 text-center">CA</th>
+                <th class="px-3 py-2 text-center">Exam</th>
+                <th class="px-3 py-2 text-center">Total</th>
+                <th class="px-3 py-2 text-center">Grade</th>
+                <th class="px-3 py-2 text-left rounded-tr-lg">Reason for Verification</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+              {% for course in verification_courses %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2 font-mono align-top">{{ course['course_name'] }}</td>
+                <td class="px-3 py-2 align-top">{{ course['course_title'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['course_units'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['ca_score'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['exam_score'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['total_score'] }}</td>
+                <td class="px-3 py-2 text-center font-semibold align-top">{{ course['final_grade'] }}</td>
+                <td class="px-3 py-2 align-top">
+                  <textarea
+                    id="verification_{{ course['course_name'] }}"
+                    data-course="{{ course['course_name'] }}"
+                    data-type="verification"
+                    rows="2"
+                    required
+                    placeholder="Explain why you're requesting verification..."
+                    class="w-full min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-y"
+                  ></textarea>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
+      {% endif %}
 
-      <!-- Payment footer -->
+      <!-- Reassessment Courses Section -->
+      {% if reassessment_courses %}
+      <div class="mb-8">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">Courses for Reassessment <span class="text-blue-600 font-normal text-sm">(₦{{ '{:,}'.format(amount_naira) if amount_naira > 0 else '0' }})</span></h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Please provide a brief reason for requesting reassessment for each course below.
+        </p>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm border-collapse">
+            <thead>
+              <tr class="bg-blue-600 text-white">
+                <th class="px-3 py-2 text-left rounded-tl-lg">Course Code</th>
+                <th class="px-3 py-2 text-left">Course Title</th>
+                <th class="px-3 py-2 text-center">Units</th>
+                <th class="px-3 py-2 text-center">CA</th>
+                <th class="px-3 py-2 text-center">Exam</th>
+                <th class="px-3 py-2 text-center">Total</th>
+                <th class="px-3 py-2 text-center">Grade</th>
+                <th class="px-3 py-2 text-left rounded-tr-lg">Reason for Reassessment</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+              {% for course in reassessment_courses %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2 font-mono align-top">{{ course['course_name'] }}</td>
+                <td class="px-3 py-2 align-top">{{ course['course_title'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['course_units'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['ca_score'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['exam_score'] }}</td>
+                <td class="px-3 py-2 text-center align-top">{{ course['total_score'] }}</td>
+                <td class="px-3 py-2 text-center font-semibold align-top">{{ course['final_grade'] }}</td>
+                <td class="px-3 py-2 align-top">
+                  <textarea
+                    id="complaint_{{ course['course_name'] }}"
+                    data-course="{{ course['course_name'] }}"
+                    data-type="reassessment"
+                    rows="2"
+                    required
+                    placeholder="Describe your concern..."
+                    class="w-full min-w-[200px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
+                  ></textarea>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Payment/Submit footer -->
       <div
-        class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-2"
+        class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-2 border-t pt-4"
       >
+        {% if reassessment_courses %}
         <p class="text-base font-semibold text-gray-700">
-          Total Amount:
+          Total Amount (Reassessment):
           <span class="text-blue-600"
             >&#8358;{{ '{:,}'.format(amount_naira) }}</span
           >
         </p>
+        {% endif %}
 
-        <div class="flex flex-col items-end gap-2">
+        <div class="flex flex-col items-end gap-2 {% if not reassessment_courses %}w-full sm:w-auto{% endif %}">
           <div
             id="errorMsg"
             class="hidden bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-2 text-sm max-w-sm text-right"
           ></div>
 
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 {% if not reassessment_courses %}w-full sm:w-auto{% endif %}">
             <div id="spinner" class="hidden">
               <div
                 class="animate-spin rounded-full h-6 w-6 border-t-4 border-blue-500 border-solid"
               ></div>
             </div>
             <button
-              id="payBtn"
-              class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              id="submitBtn"
+              class="w-full sm:w-auto bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              Pay &#8358;{{ '{:,}'.format(amount_naira) }}
+              {% if reassessment_courses and verification_courses %}
+                Pay &#8358;{{ '{:,}'.format(amount_naira) }} and Submit
+              {% elif reassessment_courses %}
+                Pay &#8358;{{ '{:,}'.format(amount_naira) }}
+              {% else %}
+                Submit Verification Request
+              {% endif %}
             </button>
           </div>
         </div>
@@ -154,7 +200,7 @@
 
     <script>
       (function () {
-        const payBtn = document.getElementById("payBtn");
+        const submitBtn = document.getElementById("submitBtn");
         const spinner = document.getElementById("spinner");
         const errorMsg = document.getElementById("errorMsg");
 
@@ -171,7 +217,7 @@
         }
 
         function setLoading(loading) {
-          payBtn.disabled = loading;
+          submitBtn.disabled = loading;
           if (loading) {
             spinner.classList.remove("hidden");
           } else {
@@ -179,11 +225,11 @@
           }
         }
 
-        payBtn.addEventListener("click", function () {
+        submitBtn.addEventListener("click", function () {
           hideError();
 
-          // Collect all textareas
           const textareas = document.querySelectorAll("textarea[data-course]");
+          const verification_reasons = {};
           const complaints = {};
           let valid = true;
 
@@ -192,7 +238,11 @@
             if (!val) {
               valid = false;
             }
-            complaints[ta.dataset.course] = val;
+            if (ta.dataset.type === "verification") {
+              verification_reasons[ta.dataset.course] = val;
+            } else if (ta.dataset.type === "reassessment") {
+              complaints[ta.dataset.course] = val;
+            }
           });
 
           if (!valid) {
@@ -209,6 +259,7 @@
             },
             body: JSON.stringify({
               uuid: UUID,
+              verification_reasons: verification_reasons,
               complaints: complaints,
             }),
           })
@@ -219,13 +270,13 @@
                   .then(function (errData) {
                     throw new Error(
                       errData.detail ||
-                        "Failed to initialise payment. Please try again.",
+                        "Failed to process request. Please try again.",
                     );
                   })
                   .catch(function (e) {
                     if (e instanceof SyntaxError) {
                       throw new Error(
-                        "Failed to initialise payment. Please try again.",
+                        "Failed to process request. Please try again.",
                       );
                     }
                     throw e;
@@ -234,30 +285,36 @@
               return response.json();
             })
             .then(function (data) {
-              if (!data.access_code) {
-                throw new Error("No access code returned from server.");
+              if (data.verification_only) {
+                // Verification-only: no Paystack, redirect directly to confirm
+                setLoading(true);
+                window.location.href =
+                  "/reassessment/confirm/?uuid=" + encodeURIComponent(UUID);
+              } else if (data.access_code) {
+                // Reassessment: use Paystack
+                const paystack = new PaystackPop();
+                paystack.resumeTransaction(data.access_code, {
+                  onSuccess: function (transaction) {
+                    setLoading(true);
+                    window.location.href =
+                      "/reassessment/confirm/?uuid=" +
+                      encodeURIComponent(UUID) +
+                      "&reference=" +
+                      encodeURIComponent(transaction.reference);
+                  },
+                  onCancel: function () {
+                    setLoading(false);
+                  },
+                  onError: function (error) {
+                    showError(
+                      "Payment error: " + (error.message || "Unknown error"),
+                    );
+                    setLoading(false);
+                  },
+                });
+              } else {
+                throw new Error("Invalid response from server.");
               }
-
-              const paystack = new PaystackPop();
-              paystack.resumeTransaction(data.access_code, {
-                onSuccess: function (transaction) {
-                  setLoading(true);
-                  window.location.href =
-                    "/reassessment/confirm/?uuid=" +
-                    encodeURIComponent(UUID) +
-                    "&reference=" +
-                    encodeURIComponent(transaction.reference);
-                },
-                onCancel: function () {
-                  setLoading(false);
-                },
-                onError: function (error) {
-                  showError(
-                    "Payment error: " + (error.message || "Unknown error"),
-                  );
-                  setLoading(false);
-                },
-              });
             })
             .catch(function (err) {
               showError(

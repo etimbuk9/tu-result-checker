@@ -104,6 +104,22 @@ def save_reassessment(complaints_df, session, semester):
             f"Failed to upload reassessment file to Dropbox: {str(e)}")
 
 
+def save_verification(verification_df, session, semester):
+    if verification_df.empty:
+        return
+
+    csv_bytes = verification_df.to_csv(index=False).encode('utf-8')
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    filename = f'verification-{session}-{semester}-{timestamp}.csv'
+    path = f'/Verifications/{filename}'
+
+    try:
+        dbx.files_upload(csv_bytes, path, mode=dropbox.files.WriteMode.add)
+    except Exception as e:
+        raise Exception(
+            f"Failed to upload verification file to Dropbox: {str(e)}")
+
+
 def main():
 
     session = '2023/2024'

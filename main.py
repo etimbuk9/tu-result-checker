@@ -37,10 +37,10 @@ def load_config() -> dict:
     return {}
 
 
-def save_config(session: str, semester: str, amount_per_course: int) -> None:
+def save_config(session: str, semester: str, amount_per_course: int, verification_open: bool = False) -> None:
     with open(CONFIG_PATH, 'w') as f:
         json.dump({'session': session, 'semester': semester,
-                  'amount_per_course': amount_per_course}, f)
+                  'amount_per_course': amount_per_course, 'verification_open': verification_open}, f)
 
 
 app = FastAPI()
@@ -74,18 +74,21 @@ class CourseSelection(BaseModel):
 class SelectionRequest(BaseModel):
     student: str
     student_name: str
-    courses: list[CourseSelection]
+    verification_courses: list[CourseSelection] = []
+    reassessment_courses: list[CourseSelection] = []
 
 
 class ComplaintsRequest(BaseModel):
     uuid: str
-    complaints: dict[str, str]
+    verification_reasons: dict[str, str] = {}
+    complaints: dict[str, str] = {}
 
 
 class AdminConfigRequest(BaseModel):
     session: str
     semester: str
     amount_per_course: int
+    verification_open: bool = False
     key: str
 
 
@@ -113,6 +116,7 @@ async def admin_panel(request: Request, key: str = ""):
         "current_session": config.get("session", ""),
         "current_semester": config.get("semester", ""),
         "current_amount": config.get("amount_per_course", 5000),
+        "verification_open": config.get("verification_open", False),
         "admin_key": key,
     })
 
@@ -128,17 +132,20 @@ async def set_config(body: AdminConfigRequest):
     if body.amount_per_course <= 0:
         raise HTTPException(
             status_code=400, detail="Amount must be greater than zero")
-    save_config(body.session, body.semester, body.amount_per_course)
-    return {"status": True, "session": body.session, "semester": body.semester, "amount_per_course": body.amount_per_course}
+    save_config(body.session, body.semester, body.amount_per_course, body.verification_open)
+    return {"status": True, "session": body.session, "semester": body.semester, "amount_per_course": body.amount_per_course, "verification_open": body.verification_open}
 
 
 @app.get("/reassessment/", response_class=HTMLResponse)
 async def reassessment_home(request: Request):
     config = load_config()
+    session = config.get("session", "")
+    semester = config.get("semester", "")
     return templates.TemplateResponse(request, "reassessment.html", {
-        "session": config.get("session", ""),
-        "semester": config.get("semester", ""),
-        "active": bool(config.get("session") and config.get("semester")),
+        "session": session,
+        "semester": semester,
+        "reassessment_active": bool(session and semester),
+        "verification_active": bool(config.get("verification_open") and session and semester),
     })
 
 
@@ -177,20 +184,29 @@ async def get_reassessment_results(student: str):
 
 @app.post("/reassessment/select/")
 async def select_courses(body: SelectionRequest):
-    if not body.courses:
+    if not body.verification_courses and not body.reassessment_courses:
         raise HTTPException(
             status_code=400, detail="Select at least one course")
     config = load_config()
-    if not config.get("session") or not config.get("semester"):
+    session = config.get("session", "")
+    semester = config.get("semester", "")
+
+    if body.reassessment_courses and (not session or not semester):
         raise HTTPException(
             status_code=503, detail="Reassessment not currently open")
+    if body.verification_courses and not config.get("verification_open"):
+        raise HTTPException(
+            status_code=503, detail="Verification not currently open")
+
     uid = str(uuid4())
     result_cache[f"reassessment:{uid}"] = {
         "student_no": body.student,
         "student_name": body.student_name,
-        "session": config["session"],
-        "semester": config["semester"],
-        "courses": [c.model_dump() for c in body.courses],
+        "session": session,
+        "semester": semester,
+        "verification_courses": [c.model_dump() for c in body.verification_courses],
+        "reassessment_courses": [c.model_dump() for c in body.reassessment_courses],
+        "verification_reasons": {},
         "complaints": {},
     }
     return {"uuid": uid}
@@ -202,20 +218,26 @@ async def complaint_form(request: Request, uuid: str):
     if entry is None:
         raise HTTPException(
             status_code=404, detail="Session expired or not found")
-    n = len(entry["courses"])
     amount_per_course = entry.get(
         "amount_per_course") or load_config().get("amount_per_course", 5000)
     entry["amount_per_course"] = amount_per_course
     result_cache[f"reassessment:{uuid}"] = entry
+
+    reassessment_courses = entry.get("reassessment_courses", [])
+    n_reassessment = len(reassessment_courses)
+    amount_naira = amount_per_course * n_reassessment if n_reassessment > 0 else 0
+    amount_kobo = amount_per_course * 100 * n_reassessment if n_reassessment > 0 else 0
+
     return templates.TemplateResponse(request, "reassessment-complaint.html", {
         "uuid": uuid,
         "student_no": entry["student_no"],
         "student_name": entry["student_name"],
         "session": entry["session"],
         "semester": entry["semester"],
-        "courses": entry["courses"],
-        "amount_naira": amount_per_course * n,
-        "amount_kobo": amount_per_course * 100 * n,
+        "verification_courses": entry.get("verification_courses", []),
+        "reassessment_courses": reassessment_courses,
+        "amount_naira": amount_naira,
+        "amount_kobo": amount_kobo,
     })
 
 
@@ -232,15 +254,48 @@ def get_charge_amount(amount_per_course, num_courses):
 
 
 @app.post("/reassessment/init-payment/")
-async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
+async def init_reassessment_payment(request: Request, body: ComplaintsRequest, background_tasks: BackgroundTasks):
     entry = result_cache.get(f"reassessment:{body.uuid}")
     if entry is None:
         raise HTTPException(status_code=404, detail="Session expired")
+
+    entry["verification_reasons"] = body.verification_reasons
     entry["complaints"] = body.complaints
     result_cache[f"reassessment:{body.uuid}"] = entry
-    amount_kobo = entry.get("amount_per_course", 5000) * \
-        100 * len(entry["courses"]) + get_charge_amount(
-            entry.get("amount_per_course", 5000), len(entry["courses"]))
+
+    reassessment_courses = entry.get("reassessment_courses", [])
+    verification_courses = entry.get("verification_courses", [])
+
+    if not reassessment_courses:
+        if verification_courses:
+            rows = []
+            for course in verification_courses:
+                rows.append({
+                    "student_no": entry["student_no"],
+                    "student_name": entry["student_name"],
+                    "session": entry["session"],
+                    "semester": entry["semester"],
+                    "course_name": course["course_name"],
+                    "course_title": course["course_title"],
+                    "reason": entry["verification_reasons"].get(course["course_name"], ""),
+                    "timestamp": dt.now().isoformat(),
+                })
+            df = pd.DataFrame(rows)
+            try:
+                dropbox_connect.save_verification(df, entry["session"], entry["semester"])
+            except Exception:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Could not save your verification request. Please try again or contact the registry.",
+                )
+            entry["submitted"] = True
+            result_cache[f"reassessment:{body.uuid}"] = entry
+            background_tasks.add_task(mail_service.send_verification_emails, entry)
+            return {"verification_only": True}
+
+    num_courses = len(reassessment_courses)
+    amount_kobo = entry.get("amount_per_course", 5000) * 100 * num_courses + get_charge_amount(
+        entry.get("amount_per_course", 5000), num_courses)
     email = f"{entry['student_no']}@topfaith.edu.ng"
     base_url = os.getenv('BASE_URL', str(request.base_url)).rstrip('/')
     callback_url = f"{base_url}/reassessment/confirm/?uuid={body.uuid}"
@@ -271,8 +326,7 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
             "subaccounts": [
                     {
                         "subaccount": "ACCT_hm8ktsr7sd7xtxr",
-                        # 16.67% to school minus 300 naira fee
-                        "share": get_charge_amount(entry.get("amount_per_course", 5000), len(entry["courses"])) - 30000,
+                        "share": get_charge_amount(entry.get("amount_per_course", 5000), num_courses) - 30000,
                     },
             ]
         }
@@ -292,49 +346,78 @@ async def init_reassessment_payment(request: Request, body: ComplaintsRequest):
 
 
 @app.get("/reassessment/confirm/", response_class=HTMLResponse)
-async def reassessment_confirm(request: Request, uuid: str, reference: str,
-                               background_tasks: BackgroundTasks):
+async def reassessment_confirm(request: Request, uuid: str, reference: str = "",
+                               background_tasks: BackgroundTasks = None):
     entry = result_cache.get(f"reassessment:{uuid}")
     if entry is None:
         return templates.TemplateResponse(request, "reassessment-confirm.html", {
             "error": "Session expired. Please start over.",
         })
-    verification = verify_transaction(reference)
-    if not verification.get("status") or verification.get("data", {}).get("status") != "success":
-        return templates.TemplateResponse(request, "reassessment-confirm.html", {
-            "error": "Payment could not be verified.",
-        })
-    rows = []
-    for course in entry["courses"]:
-        rows.append({
-            "student_no": entry["student_no"],
-            "student_name": entry["student_name"],
-            "session": entry["session"],
-            "semester": entry["semester"],
-            "course_name": course["course_name"],
-            "course_title": course["course_title"],
-            "complaint": entry["complaints"].get(course["course_name"], ""),
-            "payment_reference": reference,
-            "timestamp": dt.now().isoformat(),
-        })
-    df = pd.DataFrame(rows)
-    try:
-        dropbox_connect.save_reassessment(
-            df, entry["session"], entry["semester"])
-    except Exception:
-        return templates.TemplateResponse(request, "reassessment-confirm.html", {
-            "error": f"Your payment was received but we could not save your request. Please contact the registry with your payment reference: {reference}",
-        })
+
+    reassessment_courses = entry.get("reassessment_courses", [])
+    verification_courses = entry.get("verification_courses", [])
+
+    if reassessment_courses and reference:
+        verification = verify_transaction(reference)
+        if not verification.get("status") or verification.get("data", {}).get("status") != "success":
+            return templates.TemplateResponse(request, "reassessment-confirm.html", {
+                "error": "Payment could not be verified.",
+            })
+
+    if reassessment_courses:
+        rows = []
+        for course in reassessment_courses:
+            rows.append({
+                "student_no": entry["student_no"],
+                "student_name": entry["student_name"],
+                "session": entry["session"],
+                "semester": entry["semester"],
+                "course_name": course["course_name"],
+                "course_title": course["course_title"],
+                "complaint": entry["complaints"].get(course["course_name"], ""),
+                "payment_reference": reference,
+                "timestamp": dt.now().isoformat(),
+            })
+        df = pd.DataFrame(rows)
+        try:
+            dropbox_connect.save_reassessment(df, entry["session"], entry["semester"])
+        except Exception:
+            return templates.TemplateResponse(request, "reassessment-confirm.html", {
+                "error": f"Your payment was received but we could not save your request. Please contact the registry with your payment reference: {reference}",
+            })
+        background_tasks.add_task(mail_service.send_reassessment_emails, entry, reference)
+
+    if verification_courses:
+        rows = []
+        for course in verification_courses:
+            rows.append({
+                "student_no": entry["student_no"],
+                "student_name": entry["student_name"],
+                "session": entry["session"],
+                "semester": entry["semester"],
+                "course_name": course["course_name"],
+                "course_title": course["course_title"],
+                "reason": entry["verification_reasons"].get(course["course_name"], ""),
+                "timestamp": dt.now().isoformat(),
+            })
+        df = pd.DataFrame(rows)
+        try:
+            dropbox_connect.save_verification(df, entry["session"], entry["semester"])
+        except Exception:
+            logger.error("Failed to save verification for uuid=%s", uuid)
+        background_tasks.add_task(mail_service.send_verification_emails, entry)
+
     result_cache.pop(f"reassessment:{uuid}", None)
-    background_tasks.add_task(
-        mail_service.send_reassessment_emails, entry, reference)
+
     return templates.TemplateResponse(request, "reassessment-confirm.html", {
         "student_name": entry["student_name"],
         "student_no": entry["student_no"],
         "session": entry["session"],
         "semester": entry["semester"],
-        "courses": entry["courses"],
+        "verification_courses": verification_courses,
+        "reassessment_courses": reassessment_courses,
         "reference": reference,
-        "num_courses": len(entry["courses"]),
-        "amount_paid": entry.get("amount_per_course", 5000) * len(entry["courses"]),
+        "num_verification": len(verification_courses),
+        "num_reassessment": len(reassessment_courses),
+        "amount_paid": entry.get("amount_per_course", 5000) * len(reassessment_courses) if reassessment_courses else 0,
     })

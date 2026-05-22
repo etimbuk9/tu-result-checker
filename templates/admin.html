@@ -8,12 +8,15 @@
   <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="bg-white shadow-lg rounded-2xl p-8 w-full max-w-md">
       <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">
-        Reassessment Admin Panel
+        Registry Admin Panel
       </h2>
 
       {% if current_session %}
       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
         <p class="text-blue-800 font-medium" id="currentConfigText">Active: {{ current_session }} — {{ current_semester }} &mdash; &#8358;{{ '{:,}'.format(current_amount) }}/course</p>
+        <p class="text-sm text-blue-700 mt-1" id="verificationStatusText">
+          Verification: {% if verification_open %}<span class="text-green-700 font-semibold">Open</span>{% else %}<span class="text-gray-500">Closed</span>{% endif %}
+        </p>
       </div>
       {% else %}
       <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
@@ -74,6 +77,19 @@
           />
         </div>
 
+        <div class="border-t border-gray-200 pt-4 mt-2">
+          <p class="text-sm font-semibold text-gray-700 mb-3">Verification Settings</p>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              id="verificationOpen"
+              type="checkbox"
+              {% if verification_open %}checked{% endif %}
+              class="h-4 w-4 accent-blue-600"
+            />
+            <span class="text-sm text-gray-700">Verification open for submissions</span>
+          </label>
+        </div>
+
         <button
           id="saveBtn"
           type="submit"
@@ -123,6 +139,7 @@
           const session = document.getElementById("session").value;
           const semester = document.getElementById("semester").value;
           const amountPerCourse = parseInt(document.getElementById("amountPerCourse").value, 10);
+          const verificationOpen = document.getElementById("verificationOpen").checked;
           const successMsg = document.getElementById("successMsg");
           const errorMsg = document.getElementById("errorMsg");
           const saveBtn = document.getElementById("saveBtn");
@@ -144,6 +161,7 @@
             session: session,
             semester: semester,
             amount_per_course: amountPerCourse,
+            verification_open: verificationOpen,
             key: adminKey,
           };
 
@@ -165,6 +183,12 @@
                 errorMsg.classList.add("hidden");
                 const currentConfigText = document.getElementById("currentConfigText");
                 currentConfigText.textContent = "Active: " + session + " — " + semester + " — ₦" + amountPerCourse.toLocaleString() + "/course";
+                const verificationStatusText = document.getElementById("verificationStatusText");
+                if (verificationStatusText) {
+                  verificationStatusText.innerHTML = "Verification: " + (data.verification_open
+                    ? "<span class='text-green-700 font-semibold'>Open</span>"
+                    : "<span class='text-gray-500'>Closed</span>");
+                }
                 setTimeout(() => {
                   successMsg.classList.add("hidden");
                 }, 3000);

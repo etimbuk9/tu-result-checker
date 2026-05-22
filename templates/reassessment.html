@@ -11,12 +11,11 @@
         Topfaith University &mdash; Result Reassessment Request
       </h2>
 
-      {% if not active %}
+      {% if not reassessment_active and not verification_active %}
       <div
         class="bg-blue-50 border border-blue-300 text-blue-800 rounded-lg px-6 py-4 text-center"
       >
-        Reassessment is not currently open. Please check back later or contact
-        the registry.
+        Result verification and reassessment are not currently open. Please check back later or contact the registry.
       </div>
       {% else %}
 
@@ -70,7 +69,7 @@
         ></p>
 
         <p class="text-sm text-gray-500 mb-2">
-          Select the courses you wish to contest:
+          Select courses for verification and/or reassessment:
         </p>
 
         <div class="overflow-x-auto">
@@ -84,7 +83,8 @@
                 <th class="px-3 py-2 text-center">Exam</th>
                 <th class="px-3 py-2 text-center">Total</th>
                 <th class="px-3 py-2 text-center">Grade</th>
-                <th class="px-3 py-2 text-center rounded-tr-lg">Contest?</th>
+                <th class="px-3 py-2 text-center">Verify? (Free)</th>
+                <th class="px-3 py-2 text-center rounded-tr-lg">Reassess?</th>
               </tr>
             </thead>
             <tbody id="resultsTable" class="divide-y divide-gray-200"></tbody>
@@ -105,7 +105,7 @@
       {% endif %}
     </div>
 
-    {% if active %}
+    {% if reassessment_active or verification_active %}
     <script>
       const loadBtn = document.getElementById("loadBtn");
       const spinner = document.getElementById("spinner");
@@ -137,10 +137,13 @@
       }
 
       function updateNextBtn() {
-        const checked = resultsTable.querySelectorAll(
-          'input[type="checkbox"]:checked',
+        const verifyChecked = resultsTable.querySelectorAll(
+          'input[type="checkbox"][data-type="verify"]:checked',
         );
-        nextBtn.disabled = checked.length === 0;
+        const reassessChecked = resultsTable.querySelectorAll(
+          'input[type="checkbox"][data-type="reassess"]:checked',
+        );
+        nextBtn.disabled = verifyChecked.length === 0 && reassessChecked.length === 0;
       }
 
       loadBtn.addEventListener("click", function () {
@@ -210,12 +213,13 @@
                 '<td class="px-3 py-2 text-center font-semibold">' +
                 escapeHtml(course.final_grade) +
                 "</td>" +
-                '<td class="px-3 py-2 text-center"><input type="checkbox" class="contest-checkbox h-4 w-4 accent-blue-600 cursor-pointer" /></td>';
+                '<td class="px-3 py-2 text-center"><input type="checkbox" data-type="verify" class="selection-checkbox h-4 w-4 accent-blue-600 cursor-pointer" /></td>' +
+                '<td class="px-3 py-2 text-center"><input type="checkbox" data-type="reassess" class="selection-checkbox h-4 w-4 accent-blue-600 cursor-pointer" /></td>';
               resultsTable.appendChild(tr);
             });
 
             resultsTable
-              .querySelectorAll(".contest-checkbox")
+              .querySelectorAll(".selection-checkbox")
               .forEach(function (cb) {
                 cb.addEventListener("change", updateNextBtn);
               });
@@ -232,14 +236,31 @@
       nextBtn.addEventListener("click", function () {
         const studentNumber = studentNumberInput.value.trim();
         const studentName = studentNameDisplay.textContent;
-        const checked = resultsTable.querySelectorAll(
-          'input[type="checkbox"]:checked',
+        const verifyChecked = resultsTable.querySelectorAll(
+          'input[type="checkbox"][data-type="verify"]:checked',
         );
-        const courses = [];
+        const reassessChecked = resultsTable.querySelectorAll(
+          'input[type="checkbox"][data-type="reassess"]:checked',
+        );
+        const verification_courses = [];
+        const reassessment_courses = [];
 
-        checked.forEach(function (cb) {
+        verifyChecked.forEach(function (cb) {
           const row = cb.closest("tr");
-          courses.push({
+          verification_courses.push({
+            course_name: row.dataset.courseName,
+            course_title: row.dataset.courseTitle,
+            course_units: Number(row.dataset.courseUnits),
+            total_score: parseFloat(row.dataset.courseScore || 0),
+            ca_score: parseFloat(row.dataset.courseCa || 0),
+            exam_score: parseFloat(row.dataset.courseExam || 0),
+            final_grade: row.dataset.courseGrade || "",
+          });
+        });
+
+        reassessChecked.forEach(function (cb) {
+          const row = cb.closest("tr");
+          reassessment_courses.push({
             course_name: row.dataset.courseName,
             course_title: row.dataset.courseTitle,
             course_units: Number(row.dataset.courseUnits),
@@ -260,11 +281,15 @@
           body: JSON.stringify({
             student: studentNumber,
             student_name: studentName,
-            courses: courses,
+            verification_courses: verification_courses,
+            reassessment_courses: reassessment_courses,
           }),
         })
           .then(function (response) {
             if (!response.ok) {
+              if (response.status === 503) {
+                throw new Error("Verification or reassessment not currently open");
+              }
               throw new Error("Error submitting selection");
             }
             return response.json();

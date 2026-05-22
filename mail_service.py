@@ -43,7 +43,7 @@ def send_reassessment_emails(entry: dict, reference: str) -> None:
     student_name = entry['student_name']
     session = entry['session']
     semester = entry['semester']
-    courses = entry['courses']
+    courses = entry.get('reassessment_courses', [])
     complaints = entry.get('complaints', {})
     amount_paid = entry.get('amount_per_course', 6000) * len(courses)
 
@@ -115,3 +115,81 @@ def send_reassessment_emails(entry: dict, reference: str) -> None:
             "Notification email sent to staff for student %s", student_no)
     except Exception as exc:
         logger.error("Failed to send staff notification email: %s", exc)
+
+
+def send_verification_emails(entry: dict) -> None:
+    """
+    Sends student confirmation + staff notifications for result verification.
+    Called as a FastAPI BackgroundTask — exceptions are caught and logged.
+    """
+    student_no = entry['student_no']
+    student_name = entry['student_name']
+    session = entry['session']
+    semester = entry['semester']
+    courses = entry.get('verification_courses', [])
+    reasons = entry.get('verification_reasons', {})
+
+    course_rows_student = ''.join(
+        f"<tr><td style='padding:4px 8px'>{c['course_name']}</td>"
+        f"<td style='padding:4px 8px'>{c['course_title']}</td></tr>"
+        for c in courses
+    )
+    course_rows_staff = ''.join(
+        f"<tr><td style='padding:4px 8px'>{c['course_name']}</td>"
+        f"<td style='padding:4px 8px'>{c['course_title']}</td>"
+        f"<td style='padding:4px 8px'>{reasons.get(c['course_name'], '—')}</td></tr>"
+        for c in courses
+    )
+
+    student_html = f"""
+    <p>Dear {student_name},</p>
+    <p>Your result verification request for <strong>{session} — {semester}</strong> has been received.</p>
+    <table border='1' cellspacing='0' style='border-collapse:collapse;font-family:sans-serif;font-size:14px'>
+      <tr style='background:#1d4ed8;color:white'>
+        <th style='padding:6px 12px'>Course Code</th>
+        <th style='padding:6px 12px'>Course Title</th>
+      </tr>
+      {course_rows_student}
+    </table>
+    <p>No payment is required. Your request will be reviewed by the relevant departments. Please retain this email for your records.</p>
+    <p>Regards,<br>Topfaith University Registry</p>
+    """
+
+    staff_html = f"""
+    <p>A student has submitted a result verification request.</p>
+    <p>
+      <strong>Student:</strong> {student_name} ({student_no})<br>
+      <strong>Session:</strong> {session} — {semester}
+    </p>
+    <table border='1' cellspacing='0' style='border-collapse:collapse;font-family:sans-serif;font-size:14px'>
+      <tr style='background:#1d4ed8;color:white'>
+        <th style='padding:6px 12px'>Course Code</th>
+        <th style='padding:6px 12px'>Course Title</th>
+        <th style='padding:6px 12px'>Reason</th>
+      </tr>
+      {course_rows_staff}
+    </table>
+    """
+
+    try:
+        # student_email = f"{student_no}@topfaith.edu.ng"
+        student_email = f"dict@topfaith.edu.ng"
+        _send(
+            [student_email],
+            f"Result Verification Request Received — {session} {semester}",
+            student_html,
+        )
+        logger.info("Verification confirmation email sent to %s", student_email)
+    except Exception as exc:
+        logger.error("Failed to send verification student email: %s", exc)
+
+    try:
+        _send(
+            STAFF_EMAILS,
+            f"New Result Verification Request — {student_name} ({student_no})",
+            staff_html,
+        )
+        logger.info(
+            "Verification notification email sent to staff for student %s", student_no)
+    except Exception as exc:
+        logger.error("Failed to send verification staff email: %s", exc)

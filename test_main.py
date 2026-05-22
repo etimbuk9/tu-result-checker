@@ -37,7 +37,7 @@ def mock_result_df():
 def set_active_config(tmp_path, monkeypatch):
     """Set up a temporary config file with active session/semester for tests."""
     config_file = tmp_path / "config.json"
-    config_file.write_text('{"session": "2023-2024", "semester": "First Semester"}')
+    config_file.write_text('{"session": "2023-2024", "semester": "First Semester", "amount_per_course": 5000, "verification_open": true}')
     monkeypatch.setattr('main.CONFIG_PATH', str(config_file))
 
 
@@ -62,6 +62,7 @@ def test_set_config():
         "session": "2023-2024",
         "semester": "First Semester",
         "amount_per_course": 6000,
+        "verification_open": False,
         "key": "test_admin_key"
     })
     assert response.status_code == 200
@@ -107,9 +108,10 @@ def test_select_courses():
     response = client.post("/reassessment/select/", json={
         "student": "202100001",
         "student_name": "JOHN DOE",
-        "courses": [
+        "verification_courses": [
             {"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}
-        ]
+        ],
+        "reassessment_courses": []
     })
     assert response.status_code == 200
     assert "uuid" in response.json()
@@ -119,7 +121,8 @@ def test_select_courses_empty():
     response = client.post("/reassessment/select/", json={
         "student": "202100001",
         "student_name": "JOHN DOE",
-        "courses": []
+        "verification_courses": [],
+        "reassessment_courses": []
     })
     assert response.status_code == 400
 
@@ -129,7 +132,8 @@ def test_complaint_form_valid_uuid():
     sel_response = client.post("/reassessment/select/", json={
         "student": "202100001",
         "student_name": "JOHN DOE",
-        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+        "verification_courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}],
+        "reassessment_courses": []
     })
     uuid = sel_response.json()["uuid"]
     response = client.get(f"/reassessment/complaint/{uuid}")
@@ -143,11 +147,12 @@ def test_complaint_form_invalid_uuid():
 
 @patch('main.requests.post')
 def test_init_payment(mock_post):
-    # Set up cache entry first
+    # Set up cache entry first with reassessment courses (requires payment)
     sel_response = client.post("/reassessment/select/", json={
         "student": "202100001",
         "student_name": "JOHN DOE",
-        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+        "verification_courses": [],
+        "reassessment_courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
     })
     uuid = sel_response.json()["uuid"]
 
@@ -160,6 +165,7 @@ def test_init_payment(mock_post):
 
     response = client.post("/reassessment/init-payment/", json={
         "uuid": uuid,
+        "verification_reasons": {},
         "complaints": {"MTH101": "Score seems incorrect"}
     })
     assert response.status_code == 200
@@ -173,13 +179,14 @@ def test_reassessment_confirm_success(mock_save, mock_get):
     sel_response = client.post("/reassessment/select/", json={
         "student": "202100001",
         "student_name": "JOHN DOE",
-        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+        "verification_courses": [],
+        "reassessment_courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
     })
     uuid = sel_response.json()["uuid"]
     # Add complaints to cache via init-payment
     with patch('main.requests.post') as mock_post:
         mock_post.return_value = MagicMock(json=lambda: {"status": True, "data": {"access_code": "ac"}})
-        client.post("/reassessment/init-payment/", json={"uuid": uuid, "complaints": {"MTH101": "Wrong score"}})
+        client.post("/reassessment/init-payment/", json={"uuid": uuid, "verification_reasons": {}, "complaints": {"MTH101": "Wrong score"}})
 
     mock_get.return_value = MagicMock(json=lambda: {
         "status": True,
@@ -198,7 +205,8 @@ def test_reassessment_confirm_payment_failed(mock_get):
     sel_response = client.post("/reassessment/select/", json={
         "student": "202100001",
         "student_name": "JOHN DOE",
-        "courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
+        "verification_courses": [],
+        "reassessment_courses": [{"course_name": "MTH101", "course_title": "Mathematics", "course_units": 3}]
     })
     uuid = sel_response.json()["uuid"]
 
