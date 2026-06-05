@@ -74,6 +74,7 @@ class CourseSelection(BaseModel):
 class SelectionRequest(BaseModel):
     student: str
     student_name: str
+    student_programme: str = ""
     verification_courses: list[CourseSelection] = []
     reassessment_courses: list[CourseSelection] = []
 
@@ -163,8 +164,9 @@ async def get_reassessment_results(student: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Student not found")
     result.fillna('', inplace=True)
-    student_name = ast.literal_eval(result['student_details'].iloc[0])[
-        'student_name']
+    student_details = ast.literal_eval(result['student_details'].iloc[0])
+    student_name = student_details['student_name']
+    student_programme = student_details.get('student_programme', '')
     courses = []
     for _, row in result.iterrows():
         exam_score = row.get('exam_score') or 0
@@ -179,7 +181,7 @@ async def get_reassessment_results(student: str):
             "exam_score": exam_score,
             "final_grade": row["final_grade"],
         })
-    return {"student_name": student_name, "courses": courses}
+    return {"student_name": student_name, "student_programme": student_programme, "courses": courses}
 
 
 @app.post("/reassessment/select/")
@@ -202,6 +204,7 @@ async def select_courses(body: SelectionRequest):
     result_cache[f"reassessment:{uid}"] = {
         "student_no": body.student,
         "student_name": body.student_name,
+        "student_programme": body.student_programme,
         "session": session,
         "semester": semester,
         "verification_courses": [c.model_dump() for c in body.verification_courses],

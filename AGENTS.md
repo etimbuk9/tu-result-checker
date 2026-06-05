@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Commands
 
@@ -64,13 +64,7 @@ Single-file FastAPI app (`main.py`) with no database. Student result CSVs live i
 
 **SSL:** `dropbox_connect.get_student_result()` uses `ssl._create_unverified_context()` to fetch Dropbox shared-link CSVs, bypassing certificate verification. This is intentional to work around SSL issues on the VPS.
 
-**Unused dependencies:** `requirements.txt` includes PDF-generation libraries (`pdfkit`, `pyhanko`, `reportlab`, `xhtml2pdf`) that are not used in the current codebase — likely from a previous or planned feature. `dropbox_connect.get_code_url()` is similarly unused.
-
-**Paystack convenience fee (`get_charge_amount()`):** Computes the fee passed to the student on top of course charges: `1.5% × (amount_per_course × 100 × num_courses) + ₦500` (in kobo), clamped to [₦800, ₦2500]. The payment split sends this fee minus ₦300 to the platform subaccount, keeping ₦300 for Paystack's own cut.
-
-**`ca_score`/`exam_score` columns:** `get_reassessment_results()` reads these as top-level CSV columns (`row.get('ca_score') or 0`). The `breakdown` JSON column is not parsed by the app — it exists in the CSV but is not used for display. If a result CSV lacks these columns the values silently default to 0.
-
-**`result_cache` scope:** Despite its name, `result_cache` (`TTLCache(maxsize=1000, ttl=900)`) is used exclusively for UUID-keyed session state (`reassessment:<uuid>` entries) — there is no in-memory caching of student results from Dropbox.
+**Unused dependencies:** `requirements.txt` includes PDF-generation libraries (`pdfkit`, `pyhanko`, `reportlab`, `xhtml2pdf`) that are not used in the current codebase — likely from a previous or planned feature.
 
 ## Testing
 
@@ -80,8 +74,7 @@ Dropbox calls are patched via `@patch('main.dropbox_connect.get_result_url')` an
 
 The `TestClient` is created with `follow_redirects=False` so redirect assertions check the 307 location directly.
 
-**Test patterns:**
-- `SelectionRequest` takes `verification_courses` and `reassessment_courses` (both optional lists, but at least one must be non-empty)
-- `POST /reassessment/init-payment/` expects both `verification_reasons` and `complaints` dicts (can be empty)
-- The verification-only flow (no reassessment courses) never calls Paystack — it returns `{"verification_only": True}` and the frontend redirects to confirm
-- `MOCK_RESULT_DATA` in tests omits `ca_score`/`exam_score` columns; `row.get()` on a pandas Series returns `None` for missing keys, which the endpoint coerces to `0` via `or 0`
+**New test cases for verification:**
+- `test_select_courses` now includes both `verification_courses` and `reassessment_courses` fields (both optional, at least one required)
+- Tests now POST to `/reassessment/init-payment/` with both `verification_reasons` and `complaints` dicts
+- Tests validate verification-only submission flows (no Paystack)

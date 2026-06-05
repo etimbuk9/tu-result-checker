@@ -114,6 +114,7 @@
       const resultsTable = document.getElementById("resultsTable");
       const studentNameDisplay = document.getElementById("studentNameDisplay");
       const nextBtn = document.getElementById("nextBtn");
+      let studentProgramme = "";
       const studentNumberInput = document.getElementById("studentNumber");
 
       function showError(msg) {
@@ -179,6 +180,7 @@
           .then(function (data) {
             hideSpinner();
             studentNameDisplay.textContent = data.student_name;
+            studentProgramme = data.student_programme || "";
             resultsTable.innerHTML = "";
 
             data.courses.forEach(function (course) {
@@ -281,6 +283,7 @@
           body: JSON.stringify({
             student: studentNumber,
             student_name: studentName,
+            student_programme: studentProgramme,
             verification_courses: verification_courses,
             reassessment_courses: reassessment_courses,
           }),

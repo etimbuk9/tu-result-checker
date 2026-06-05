@@ -21,6 +21,16 @@ STAFF_EMAILS = [
 ]
 
 
+def get_faculty_emails(programme: str) -> list:
+    import pandas as pd
+
+    url = "https://www.dropbox.com/scl/fi/lrj3lemocvce04u79irkc/faculty_mails.csv?rlkey=qs670wcrm94sul0q7idko6uh7&dl=1"
+    df = pd.read_csv(url)
+    faculty_emails = df[df['Programme'] == programme][[
+        'HOD', 'Dean']].iloc[0].values.tolist()
+    return faculty_emails
+
+
 def _send(to: list[str], subject: str, html: str) -> None:
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
@@ -94,8 +104,8 @@ def send_reassessment_emails(entry: dict, reference: str) -> None:
     """
 
     try:
-        # student_email = f"{student_no}@topfaith.edu.ng"
-        student_email = f"dict@topfaith.edu.ng"
+        student_email = f"{student_no}@topfaith.edu.ng"
+        # student_email = f"dict@topfaith.edu.ng"
         _send(
             [student_email],
             f"Reassessment Request Received — {session} {semester}",
@@ -105,9 +115,20 @@ def send_reassessment_emails(entry: dict, reference: str) -> None:
     except Exception as exc:
         logger.error("Failed to send student confirmation email: %s", exc)
 
+    faculty_emails = []
+    programme = entry.get('student_programme', '')
+    if programme:
+        try:
+            faculty_emails = get_faculty_emails(programme)
+        except Exception as exc:
+            logger.error(
+                "Failed to get faculty emails for programme %s: %s", programme, exc)
+
+    logger.info("Sending reassessment email to staff for student %s (%s), faculty emails: %s",
+                student_no, student_name, faculty_emails)
     try:
         _send(
-            STAFF_EMAILS,
+            STAFF_EMAILS + faculty_emails,
             f"New Reassessment Request — {student_name} ({student_no})",
             staff_html,
         )
@@ -172,20 +193,33 @@ def send_verification_emails(entry: dict) -> None:
     """
 
     try:
-        # student_email = f"{student_no}@topfaith.edu.ng"
-        student_email = f"dict@topfaith.edu.ng"
+        student_email = f"{student_no}@topfaith.edu.ng"
+        # student_email = f"dict@topfaith.edu.ng"
         _send(
             [student_email],
             f"Result Verification Request Received — {session} {semester}",
             student_html,
         )
-        logger.info("Verification confirmation email sent to %s", student_email)
+        logger.info("Verification confirmation email sent to %s",
+                    student_email)
     except Exception as exc:
         logger.error("Failed to send verification student email: %s", exc)
 
+    faculty_emails = []
+    programme = entry.get('student_programme', '')
+    logger.info("Fetching faculty emails for programme: %s", programme)
+    if programme:
+        try:
+            faculty_emails = get_faculty_emails(programme)
+        except Exception as exc:
+            logger.error(
+                "Failed to get faculty emails for programme %s: %s", programme, exc)
+
+    logger.info("Sending verification notification email to staff for student %s (%s), faculty emails: %s",
+                student_no, student_name, faculty_emails)
     try:
         _send(
-            STAFF_EMAILS,
+            STAFF_EMAILS + faculty_emails,
             f"New Result Verification Request — {student_name} ({student_no})",
             staff_html,
         )
