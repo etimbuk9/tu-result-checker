@@ -28,7 +28,8 @@ def get_faculty_emails(programme: str) -> list:
     df = pd.read_csv(url)
     faculty_emails = df[df['Programme'] == programme][[
         'HOD', 'Dean']].iloc[0].values.tolist()
-    faculty_emails = [email for email in faculty_emails if pd.notna(email)]
+    faculty_emails = [str(email).strip() for email in faculty_emails]
+    faculty_emails = [email for email in faculty_emails if email != 'nan']
     return faculty_emails
 
 
