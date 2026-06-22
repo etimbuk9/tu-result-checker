@@ -28,6 +28,7 @@ def get_faculty_emails(programme: str) -> list:
     df = pd.read_csv(url)
     faculty_emails = df[df['Programme'] == programme][[
         'HOD', 'Dean']].iloc[0].values.tolist()
+    faculty_emails = [email for email in faculty_emails if pd.notna(email)]
     return faculty_emails
 
 
@@ -219,7 +220,7 @@ def send_verification_emails(entry: dict) -> None:
                 student_no, student_name, faculty_emails)
     try:
         _send(
-            STAFF_EMAILS + faculty_emails,
+            faculty_emails + STAFF_EMAILS,
             f"New Result Verification Request — {student_name} ({student_no})",
             staff_html,
         )
