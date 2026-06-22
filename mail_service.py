@@ -15,9 +15,9 @@ STAFF_EMAILS = [
     # 'hod@topfaith.edu.ng',
     # 'dean@topfaith.edu.ng',
     'dict@topfaith.edu.ng',
-    # 'dap@topfaith.edu.ng',
-    # 'registrar@topfaith.edu.ng',
-    # 'vc@topfaith.edu.ng',
+    'dap@topfaith.edu.ng',
+    'registrar@topfaith.edu.ng',
+    'vc@topfaith.edu.ng',
 ]
 
 
